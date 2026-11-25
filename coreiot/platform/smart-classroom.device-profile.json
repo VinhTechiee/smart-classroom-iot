@@ -1,0 +1,12 @@
+{
+  "name": "Smart Classroom",
+  "description": "Classroom telemetry and two-way actuator RPC via the PC gateway",
+  "type": "DEFAULT",
+  "transportType": "DEFAULT",
+  "provisionType": "DISABLED",
+  "profileData": {
+    "configuration": {"type": "DEFAULT"},
+    "transportConfiguration": {"type": "DEFAULT"},
+    "provisionConfiguration": {"type": "DISABLED"}
+  }
+}
