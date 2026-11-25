@@ -1,0 +1,12 @@
+.env
+.env.*
+!.env.example
+config.h
+secrets.h
+config.local.*
+.pio/
+.venv/
+__pycache__/
+*.pyc
+build/
+.DS_Store
