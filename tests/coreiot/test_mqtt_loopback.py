@@ -1,7 +1,10 @@
 """Exercise the Paho adapter against a minimal local MQTT 3.1.1 peer."""
 
 import json
+import os
 import socket
+import subprocess
+import sys
 import unittest
 from collections import Counter
 from threading import Event, Thread
@@ -80,10 +83,11 @@ class MqttLoopbackTests(unittest.TestCase):
         send_packet(connection, 0x90, subscription_id + b"\x01")
         return client_id
 
-    def command(self, connection, request_id, packet_id, method, value, *, duplicate=False):
+    def command(self, connection, request_id, packet_id, method, value, *, duplicate=False, retained=False):
         payload = json.dumps({"method": method, "params": value}).encode("utf-8")
         message = wire_field(RPC_REQUEST_PREFIX + request_id) + packet_id.to_bytes(2, "big") + payload
-        send_packet(connection, 0x3A if duplicate else 0x32, message)
+        header = (0x3A if duplicate else 0x32) | int(retained)
+        send_packet(connection, header, message)
 
     def publications(
         self, connection: socket.socket, count: int, *, defer_pubacks: list[bytes] | None = None,
@@ -104,6 +108,41 @@ class MqttLoopbackTests(unittest.TestCase):
             messages.append((topic.decode("utf-8"), json.loads(payload[2:])))
         return messages, acknowledgements
 
+    def test_minimal_cli_publishes_available_values_and_led_ack(self):
+        with socket.socket() as broker:
+            broker.bind(("127.0.0.1", 0))
+            broker.listen()
+            broker.settimeout(5)
+            env = {
+                **os.environ,
+                "COREIOT_MQTT_URL": f"mqtt://127.0.0.1:{broker.getsockname()[1]}",
+                "COREIOT_DEVICE_TOKEN": "loopback-token",
+                "COREIOT_MQTT_CA_FILE": "",
+            }
+            args = [sys.executable, "-m", "coreiot.simulator", "--minimal", "--device-id", "classroom-01-sim",
+                    "--omit-humidity", "--temperature", "27", "--interval-ms", "60000"]
+            with subprocess.Popen(args, env=env, stderr=subprocess.DEVNULL) as client:
+                try:
+                    peer, _ = broker.accept()
+                    with peer:
+                        self.connect_peer(peer)
+                        [(topic, sample)], _ = self.publications(peer, 1)
+                        self.assertEqual(topic, TELEMETRY_TOPIC)
+                        self.assertEqual(sample["values"], {
+                            "deviceId": "classroom-01-sim", "ts": sample["ts"],
+                            "temperature": 27, "lamp": False, "fwVersion": "1.0.0",
+                        })
+                        self.command(peer, "42", 10, "setLamp", True)
+                        [(response_topic, ack), (report_topic, report)], _ = self.publications(peer, 2)
+                        self.assertEqual((response_topic, report_topic), (RPC_RESPONSE_PREFIX + "42", TELEMETRY_TOPIC))
+                        self.assertIs(ack["ok"], True)
+                        self.assertIs(ack["actualState"], True)
+                        self.assertIs(report["values"]["lamp"], True)
+                        self.assertGreater(report["ts"], sample["ts"])
+                        self.assertNotIn("humidity", report["values"])
+                finally:
+                    client.terminate()
+
     def test_auth_subscription_rpc_state_qos_retransmission_and_reconnect(self):
         with socket.socket() as broker:
             broker.bind(("127.0.0.1", 0))
@@ -122,6 +161,8 @@ class MqttLoopbackTests(unittest.TestCase):
                     self.assertEqual(initial[0][0], TELEMETRY_TOPIC)
                     self.assertEqual(initial[0][1]["values"]["fwVersion"], "1.1.0")
 
+                    self.command(first, "retained", 9, "setLamp", True, retained=True)
+                    self.assertEqual(read_packet(first), (0x40, b"\x00\x09"))
                     self.command(first, "42", 10, "setFan", True)
                     messages, pubacks = self.publications(first, 2)
                     self.assertEqual(pubacks, {10: 1})
@@ -129,6 +170,8 @@ class MqttLoopbackTests(unittest.TestCase):
                     first_ack = messages[0][1]
                     self.assertTrue(first_ack["ok"] and first_ack["actualState"])
                     self.assertTrue(messages[1][1]["values"]["fan"])
+                    self.assertIs(messages[1][1]["values"]["lamp"], False)
+                    self.assertEqual(first_ack["ts"], messages[1][1]["ts"])
 
                     self.command(first, "42", 10, "setFan", True, duplicate=True)
                     self.command(first, "43", 11, "setDoor", 1)
@@ -136,6 +179,7 @@ class MqttLoopbackTests(unittest.TestCase):
                     self.assertEqual(replies[0], (RPC_RESPONSE_PREFIX + "42", first_ack))
                     self.assertEqual(replies[1][0], RPC_RESPONSE_PREFIX + "43")
                     self.assertEqual(replies[1][1]["error"], "invalid_value")
+                    self.assertIs(simulator.sample(0).body["values"]["door"], False)
 
                 second, _ = broker.accept()
                 with second:

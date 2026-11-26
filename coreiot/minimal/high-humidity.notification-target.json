@@ -1,0 +1,11 @@
+{
+  "name": "Smart Classroom Demo Recipient",
+  "configuration": {
+    "type": "PLATFORM_USERS",
+    "usersFilter": {
+      "type": "USER_LIST",
+      "usersIds": ["${demoUserId}"]
+    },
+    "description": "The approved recipient for the Smart Classroom demo."
+  }
+}

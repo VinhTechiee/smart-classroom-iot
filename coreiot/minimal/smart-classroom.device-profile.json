@@ -1,0 +1,18 @@
+{
+  "name": "Smart Classroom Minimal",
+  "description": "Relative humidity monitoring and board LED RPC via the PC gateway",
+  "type": "DEFAULT",
+  "transportType": "DEFAULT",
+  "provisionType": "DISABLED",
+  "profileData": {
+    "configuration": {
+      "type": "DEFAULT"
+    },
+    "transportConfiguration": {
+      "type": "DEFAULT"
+    },
+    "provisionConfiguration": {
+      "type": "DISABLED"
+    }
+  }
+}

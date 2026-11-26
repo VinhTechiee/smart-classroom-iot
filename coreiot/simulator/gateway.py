@@ -13,6 +13,8 @@ RPC_RESPONSE_PREFIX = "v1/devices/me/rpc/response/"
 ACTUATORS = {"setLamp": "lamp", "setFan": "fan", "setDoor": "door"}
 SENSOR_FIELDS = ("temperature", "humidity", "light", "distance")
 STATE_FIELDS = ("motion", *ACTUATORS.values())
+MINIMAL_SENSOR_FIELDS = ("humidity", "temperature")
+MINIMAL_STATE_FIELDS = ("lamp",)
 TOPIC_SEGMENT = re.compile(r"[A-Za-z0-9_.-]{1,128}\Z")
 MAX_MQTT_PAYLOAD_BYTES = 4096
 
@@ -60,7 +62,9 @@ def json_object(payload: bytes) -> dict:
     return value
 
 
-def cloud_telemetry(topic: str, sample: dict, device_id: str, received_ms: int) -> Publication:
+def cloud_telemetry(
+    topic: str, sample: dict, device_id: str, received_ms: int, *, minimal: bool = False,
+) -> Publication:
     """Validate the shared sample and use the receipt time for an unsynchronized device."""
     if topic != f"classroom/{device_id}/telemetry" or sample.get("deviceId") != device_id:
         raise ValueError("Unknown or mismatched telemetry device")
@@ -68,17 +72,30 @@ def cloud_telemetry(topic: str, sample: dict, device_id: str, received_ms: int) 
         raise ValueError("Telemetry ts must be Unix milliseconds or null")
     if not valid_timestamp(received_ms):
         raise ValueError("Gateway receipt time must be Unix milliseconds")
-    for key in SENSOR_FIELDS:
-        if not finite_number(sample.get(key)):
+    values = {"deviceId": device_id}
+    sensor_fields = MINIMAL_SENSOR_FIELDS if minimal else SENSOR_FIELDS
+    state_fields = MINIMAL_STATE_FIELDS if minimal else STATE_FIELDS
+    for key in sensor_fields:
+        value = sample.get(key)
+        if minimal and value is None:
+            continue
+        if not finite_number(value):
             raise ValueError(f"Telemetry {key} must be a finite number")
-    for key in STATE_FIELDS:
-        if type(sample.get(key)) is not bool:
+        if minimal and key == "humidity" and not 0 <= value <= 100:
+            raise ValueError("Telemetry humidity must be between 0 and 100 percent RH")
+        values[key] = value
+    for key in state_fields:
+        value = sample.get(key)
+        if minimal and value is None:
+            continue
+        if type(value) is not bool:
             raise ValueError(f"Telemetry {key} must be a boolean")
+        values[key] = value
     version = sample.get("fwVersion")
     if not isinstance(version, str) or not version.strip():
         raise ValueError("Telemetry fwVersion must be a nonempty string")
 
-    values = {key: sample[key] for key in ("deviceId", *SENSOR_FIELDS, *STATE_FIELDS, "fwVersion")}
+    values["fwVersion"] = version
     timestamp = sample["ts"]
     if timestamp is not None:
         values["ts"] = timestamp
@@ -136,6 +153,7 @@ class RpcBridge:
     def accept_rpc(
         self, topic: str, payload: bytes, now: float, *,
         device_available: bool = True, retained: bool = False,
+        supported_methods: tuple[str, ...] = tuple(ACTUATORS),
     ) -> Publication | None:
         if retained or not topic.startswith(RPC_REQUEST_PREFIX):
             return None
@@ -152,7 +170,7 @@ class RpcBridge:
             return self._finish(request_id, failure(command_id, "invalid_json"))
         method = request.get("method")
         value = request.get("params")
-        if not isinstance(method, str) or method not in ACTUATORS:
+        if not isinstance(method, str) or method not in supported_methods:
             return self._finish(request_id, failure(command_id, "unsupported_method"))
         if type(value) is not bool:
             return self._finish(request_id, failure(command_id, "invalid_value"))

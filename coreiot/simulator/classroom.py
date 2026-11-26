@@ -22,6 +22,12 @@ DEFAULT_READINGS = {
     "door": False,
     "fwVersion": "1.0.0",
 }
+MINIMAL_READINGS = {
+    "humidity": DEFAULT_READINGS["humidity"],
+    "temperature": None,
+    "lamp": DEFAULT_READINGS["lamp"],
+    "fwVersion": DEFAULT_READINGS["fwVersion"],
+}
 
 
 def log_event(event: str, *, level: int = logging.INFO, **fields: object) -> None:
@@ -40,7 +46,7 @@ class Simulator:
     def __init__(
         self, bridge: RpcBridge, *, readings: dict | None = None, interval: float = 5,
         ack_delay: float = 0.050, synchronized: bool = True, device_present: bool = True,
-        device_online: bool = True, drop_ack: bool = False,
+        device_online: bool = True, drop_ack: bool = False, minimal: bool = False,
     ) -> None:
         if not math.isfinite(interval) or interval <= 0 or not math.isfinite(ack_delay) or ack_delay < 0:
             raise ValueError("Telemetry interval must be positive and ACK delay must be nonnegative")
@@ -51,8 +57,15 @@ class Simulator:
         self.device_present = device_present
         self.device_online = device_online
         self.drop_ack = drop_ack
+        self.minimal = minimal
         self.telemetry_topic = f"classroom/{bridge.device_id}/telemetry"
-        self._values = {**DEFAULT_READINGS, **(readings or {}), "deviceId": bridge.device_id}
+        defaults = MINIMAL_READINGS if minimal else DEFAULT_READINGS
+        if minimal and readings is not None and readings.keys() - defaults.keys():
+            raise ValueError("Minimal simulator readings are humidity, optional temperature, lamp and fwVersion")
+        self._values = {**defaults, **(readings or {}), "deviceId": bridge.device_id}
+        self._supported_methods = tuple(
+            method for method, actuator in ACTUATORS.items() if self._values.get(actuator) is not None
+        )
         self._commands: deque[tuple[float, Publication]] = deque()
         self._next_telemetry = 0.0
         self._last_sample_ms = -1
@@ -73,7 +86,7 @@ class Simulator:
 
     def sample(self, wall_ms: int) -> Publication:
         source = {**self._values, "ts": wall_ms if self.synchronized else None}
-        return cloud_telemetry(self.telemetry_topic, source, self.bridge.device_id, wall_ms)
+        return cloud_telemetry(self.telemetry_topic, source, self.bridge.device_id, wall_ms, minimal=self.minimal)
 
     def receive_rpc(
         self, topic: str, payload: bytes, now: float, *, retained: bool = False, duplicate: bool = False,
@@ -86,6 +99,7 @@ class Simulator:
             log_event("mqtt_duplicate_received", device_id=self.bridge.device_id, topic=topic)
         outgoing = self.bridge.accept_rpc(
             topic, payload, now, device_available=self.device_present, retained=retained,
+            supported_methods=self._supported_methods,
         )
         if outgoing is None:
             return output

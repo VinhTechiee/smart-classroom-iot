@@ -50,7 +50,9 @@ class RpcBridgeTests(unittest.TestCase):
             (b"{", True, "invalid_json"),
             (b'{"method":"setFan","params":NaN}', True, "invalid_json"),
             (request("setWindow", True), True, "unsupported_method"),
+            (request("constructor", True), True, "unsupported_method"),
             (request("setFan", 1), True, "invalid_value"),
+            (request("setLamp", "true"), True, "invalid_value"),
             (request("setDoor", {"value": True}), True, "invalid_value"),
             (request("setLamp", True), False, "unknown_device"),
         )
@@ -112,6 +114,34 @@ class RpcBridgeTests(unittest.TestCase):
 
 
 class SimulatorTests(unittest.TestCase):
+    def test_minimal_rpc_reports_both_led_states_without_extended_actuators(self):
+        simulator = Simulator(RpcBridge(DEVICE, 1), minimal=True, ack_delay=0)
+        simulator.connected(0)
+        initial = simulator.step(0, SOURCE_TS)[0]
+        self.assertIs(initial.body["values"]["lamp"], False)
+        for method in ("setFan", "setDoor"):
+            rejected, = simulator.receive_rpc(RPC_REQUEST_PREFIX + method, request(method, True), 0.1)
+            self.assertEqual(rejected.body["error"], "unsupported_method")
+
+        for index, state in enumerate((True, False), 1):
+            request_id = str(index)
+            outputs = simulator.receive_rpc(RPC_REQUEST_PREFIX + request_id, request("setLamp", state), index)
+            self.assertEqual(outputs, [])
+            response, reported = simulator.step(index, SOURCE_TS + index * 1000)
+            self.assertEqual(response.topic, RPC_RESPONSE_PREFIX + request_id)
+            self.assertIs(response.body["ok"], True)
+            self.assertIs(response.body["actualState"], state)
+            self.assertIs(reported.body["values"]["lamp"], state)
+            self.assertEqual(response.body["ts"], reported.body["ts"])
+
+    def test_minimal_can_run_before_led_support_is_confirmed(self):
+        simulator = Simulator(RpcBridge(DEVICE, 1), readings={"lamp": None}, minimal=True)
+        simulator.connected(0)
+        sample, = simulator.step(0, SOURCE_TS)
+        self.assertNotIn("lamp", sample.body["values"])
+        rejected, = simulator.receive_rpc(RPC_REQUEST_PREFIX + "1", request("setLamp", True), 0.1)
+        self.assertEqual(rejected.body["error"], "unsupported_method")
+
     def test_first_seen_qos_duplicate_and_conflicting_requests_publish_each_state(self):
         simulator = Simulator(RpcBridge(DEVICE, 1), ack_delay=0.1)
         simulator.connected(0)
@@ -125,14 +155,17 @@ class SimulatorTests(unittest.TestCase):
         self.assertTrue(on.body["values"]["lamp"])
         self.assertFalse(off.body["values"]["lamp"])
         self.assertLess(on.body["ts"], off.body["ts"])
+        replay = simulator.receive_rpc(RPC_REQUEST_PREFIX + "1", request("setLamp", True), 0.4, duplicate=True)
+        self.assertEqual(replay, [first])
+        self.assertEqual(simulator.step(0.5, SOURCE_TS + 500), [])
+        self.assertIs(simulator.sample(SOURCE_TS + 500).body["values"]["lamp"], False)
 
     def test_three_actuators_report_fresh_state_after_execution(self):
         simulator = Simulator(RpcBridge(DEVICE, 1), ack_delay=0, synchronized=False)
         simulator.connected(0)
         initial = simulator.step(0, SOURCE_TS)[0]
         self.assertEqual(initial.topic, TELEMETRY_TOPIC)
-        self.assertEqual(initial.body["values"]["fwVersion"], "1.0.0")
-        self.assertNotIn("ts", initial.body["values"])
+        self.assertEqual(initial.body, {"ts": SOURCE_TS, "values": {**DEFAULT_READINGS, "deviceId": DEVICE}})
         for index, (method, state) in enumerate((("setLamp", "lamp"), ("setFan", "fan"), ("setDoor", "door"))):
             for value in (True, False):
                 now = index + 1 + int(not value) / 2
@@ -184,6 +217,27 @@ class SimulatorTests(unittest.TestCase):
 
 
 class TelemetryTests(unittest.TestCase):
+    def test_minimal_telemetry_only_contains_available_measurements(self):
+        required = {"deviceId": DEVICE, "ts": SOURCE_TS, "humidity": 65.0, "lamp": False, "fwVersion": "1.0.0"}
+        for readings, expected in (
+            ({}, required),
+            ({"temperature": 27.5}, {**required, "temperature": 27.5}),
+            ({"humidity": None, "temperature": None}, {key: val for key, val in required.items() if key != "humidity"}),
+        ):
+            with self.subTest(readings=readings):
+                simulator = Simulator(RpcBridge(DEVICE, 1), readings=readings, minimal=True)
+                self.assertEqual(simulator.sample(SOURCE_TS).body, {"ts": SOURCE_TS, "values": expected})
+
+        lamp_only = {"deviceId": DEVICE, "ts": None, "lamp": True, "fwVersion": "1.1.0"}
+        result = cloud_telemetry(f"classroom/{DEVICE}/telemetry", lamp_only, DEVICE, SOURCE_TS, minimal=True)
+        self.assertEqual(result.body, {"ts": SOURCE_TS, "values": {k: v for k, v in lamp_only.items() if k != "ts"}})
+
+    def test_minimal_rejects_invalid_humidity_and_optional_values(self):
+        for readings in ({"humidity": -1}, {"humidity": 101}, {"humidity": True}, {"temperature": "28"},
+                         {"temperature": float("inf")}, {"lamp": 1}, {"light": 0}):
+            with self.subTest(readings=readings), self.assertRaises(ValueError):
+                Simulator(RpcBridge(DEVICE, 1), readings=readings, minimal=True)
+
     def test_shared_telemetry_preserves_values_and_timestamp(self):
         sample = {**DEFAULT_READINGS, "deviceId": DEVICE, "ts": SOURCE_TS, "fwVersion": "1.1.0"}
         local_topic = f"classroom/{DEVICE}/telemetry"

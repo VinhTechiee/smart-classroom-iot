@@ -1,6 +1,0 @@
-{
-  "name": "smart-classroom-coreiot-tests",
-  "private": true,
-  "engines": { "node": ">=22" },
-  "dependencies": { "mqtt": "5.16.0" }
-}

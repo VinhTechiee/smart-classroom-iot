@@ -1,24 +1,30 @@
 # Python CoreIOT simulator
 
-The simulator opens one CoreIOT MQTT device session for a sandbox classroom. Its gateway maps cloud RPCs to the shared local command topic and models execution and ACKs in memory. Its cloud-facing topics are the same ones Member B can use from the PC gateway. All measurements, actuator actions, and version reports from the simulator are synthetic.
+Use `python -m coreiot.simulator` for both minimal and extended integration. The simulator opens one CoreIOT MQTT device session for a sandbox classroom. Its gateway maps cloud RPCs to the shared local command topic and models execution and ACKs in memory. Its cloud-facing topics are the same ones Member B can use from the PC gateway. All measurements, actuator actions, and version reports from the simulator are synthetic.
 
 ## Install and connect
 
 Set up the [Python environment and pinned Paho MQTT client](../README.md#install-and-run-the-python-simulator) from the repository root. [Paho MQTT 2.1.0](https://pypi.org/project/paho-mqtt/2.1.0/)
 
-Create `coreiot/.env` from the example if you do not already have one. Enter the tenant's sandbox MQTT endpoint, device token, and device name. The MQTT username is the device token. Use `mqtts://` and the tenant's TLS port for an encrypted connection. The simulator checks certificates and hostnames against the system trust store or the PEM CA bundle configured by `COREIOT_MQTT_CA_FILE`. Use plain `mqtt://` for an isolated endpoint such as a local test broker. Environment variables in the current shell take precedence over entries in the local file. Keep the device name and dashboard alias aligned with `COREIOT_DEVICE_ID`. [Example configuration](../.env.example)
+Configure the ignored `coreiot/.env` using the [tenant connection steps](../docs/PLATFORM_DEPLOYMENT.md#2-configure-the-endpoint-and-local-credentials). The simulator uses the device token as the MQTT username. On `mqtts://`, it checks certificates and hostnames against the system trust store or the PEM CA bundle configured by `COREIOT_MQTT_CA_FILE`. Environment variables in the current shell take precedence over entries in the local file.
 
 ```powershell
-& .venv/coreiot/Scripts/python.exe -m coreiot.simulator --env-file coreiot/.env
+& .venv/coreiot/Scripts/python.exe -m coreiot.simulator --minimal --env-file coreiot/.env
 ```
 
 Expected startup events are `mqtt_connecting`, `mqtt_connected`, `rpc_subscription_ready`, `telemetry_queued`, and `mqtt_puback`. The first sample is queued after the RPC subscription is accepted. Subsequent samples are sent every five seconds, with fresh telemetry after every applied command. Ctrl+C pauses RPC intake and allows up to 350 ms for queued QoS 1 publish acknowledgements before disconnecting. A broker delay beyond that window produces a `mqtt_shutdown_pending` log. Use one simulator or gateway at a time with a given token. [Paho MQTT client](https://eclipse.dev/paho/files/paho.mqtt.python/html/client.html)
 
 ## Send readings and simulate faults
 
-Run one example at a time. Stopping and restarting resets the simulated actuator state to the selected initial values. Firmware versions `1.0.0` and `1.1.0` exercise the version display before the physical OTA test.
+Run one example at a time. For the ordered 65, 85, 77 and 70% RH sequence, use the [deployment scenario commands](../docs/PLATFORM_DEPLOYMENT.md#10-run-the-synthetic-scenarios). Carry the last verified LED state into each restart with `--lamp`, since the simulator initializes its actuator state at process startup. Firmware versions `1.0.0` and `1.1.0` exercise the version display with synthetic data.
+
+`--minimal` publishes humidity, `lamp`, `fwVersion` and device identity. Pass `--temperature` to include a temperature sample. `--omit-humidity` simulates a failed sensor reading, and `--no-led` omits `lamp` and rejects LED RPC. In this mode `setFan` and `setDoor` are unsupported. The examples after the blank line exercise the extended profile.
 
 ```powershell
+& .venv/coreiot/Scripts/python.exe -m coreiot.simulator --minimal --env-file coreiot/.env --humidity 80 --lamp false
+& .venv/coreiot/Scripts/python.exe -m coreiot.simulator --minimal --env-file coreiot/.env --humidity 75 --temperature 27 --lamp true
+& .venv/coreiot/Scripts/python.exe -m coreiot.simulator --minimal --env-file coreiot/.env --omit-humidity --no-led
+
 & .venv/coreiot/Scripts/python.exe -m coreiot.simulator --env-file coreiot/.env --temperature 35 --light 100 --motion true --fw-version 1.0.0
 & .venv/coreiot/Scripts/python.exe -m coreiot.simulator --env-file coreiot/.env --temperature 27 --light 400 --motion false --lamp true --fan true --fw-version 1.1.0
 & .venv/coreiot/Scripts/python.exe -m coreiot.simulator --env-file coreiot/.env --unsynchronized --interval-ms 1000
@@ -45,4 +51,4 @@ The gateway keeps up to 64 pending requests and 256 recent results for its activ
 & .venv/coreiot/Scripts/python.exe -m unittest discover -s tests/coreiot -p 'test_*.py' -v
 ```
 
-The unit suite verifies validation, concurrent independent ACKs, request timeouts, late ACKs, and state updates. The MQTT loopback test runs Paho against a local protocol fixture and verifies the MQTT username, QoS 1, resubscription, and graceful disconnect. Use the tenant acceptance checks to verify the actual CoreIOT instance. [Tenant acceptance checks](../INTEGRATION.md#acceptance-checks)
+The unit suite verifies validation, concurrent independent ACKs, request timeouts, late ACKs, and state updates. The MQTT loopback test runs Paho against a local protocol fixture and verifies the MQTT username, QoS 1, resubscription, and graceful disconnect. [Tenant acceptance checks](../docs/VERIFICATION.md#run-against-the-course-tenant)

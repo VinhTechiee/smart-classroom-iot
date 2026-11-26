@@ -26,4 +26,4 @@ Read [the interface contract](shared/PROTOCOL.md) and [the development plan](doc
 
 ## Status
 
-Planning and implementation in progress. Hardware integration, CoreIOT configuration and system validation are pending. Module-specific installation instructions will be added as implementations become available.
+Member C's [CoreIOT deployment guide](coreiot/docs/PLATFORM_DEPLOYMENT.md) covers the current Yolo UNO kit, humidity monitoring, board LED RPC, notifications, OTA and the Python simulator. The [extended configuration](coreiot/README.md#extended-hardware-configuration) is available for a future kit. Course tenant configuration and end-to-end hardware verification are pending.

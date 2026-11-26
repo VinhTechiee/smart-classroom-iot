@@ -4,9 +4,9 @@ From the repository root, [install the Python simulator](../../coreiot/README.md
 
 ```powershell
 & .venv/coreiot/Scripts/python.exe -m unittest discover -s tests/coreiot -p 'test_*.py' -v
-node --test tests/coreiot/dashboard.test.cjs tests/coreiot/rules.test.js
+node --test tests/coreiot/*.test.cjs tests/coreiot/*.test.js
 ```
 
-The Python suite covers RPC correlation, timeout and duplicate handling, reconnect, MQTT loopback, and the tenant smoke runner's telemetry checks. The JavaScript suites exercise the RuleChain scripts and validate dashboard and device templates. Each local suite uses synthetic data.
+The Python suite exercises the same simulator used for tenant integration, including RPC correlation, timeout, duplicate and retained-request handling, reconnect, MQTT loopback, and the tenant smoke runner's telemetry checks. MQTT loopback uses the simulator's pinned `paho-mqtt` package. The JavaScript suites exercise the RuleChain scripts and validate dashboard and device templates with built-in Node modules. Each local suite uses synthetic data.
 
-Run the [authenticated tenant smoke test](../../coreiot/docs/VERIFICATION.md#run-against-the-course-tenant) with the Python simulator and a separate sandbox entity. Use the [physical demo checklist](../../coreiot/docs/DEMO.md) for hardware evidence.
+Use the [deployment guide](../../coreiot/docs/PLATFORM_DEPLOYMENT.md#6-verify-two-way-led-on-and-off) to run the authenticated LED smoke test, the [OTA lab steps](../../coreiot/platform/OTA.md#check-package-delivery-without-hardware) for virtual download verification, and the [verification guide](../../coreiot/docs/VERIFICATION.md) to record physical evidence.

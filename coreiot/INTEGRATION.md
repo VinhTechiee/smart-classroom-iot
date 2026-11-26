@@ -1,5 +1,7 @@
 # Gateway integration and acceptance
 
+For current hardware, the [physical commissioning checklist](docs/PLATFORM_DEPLOYMENT.md#12-switch-to-the-real-gateway-and-sensor) specifies the proposed telemetry subset and LED acceptance check. Keep the per-device topic mapping below. Agree on omitted sensor and actuator fields with A and B before physical commissioning. The extended examples below cover the original kit.
+
 ## Cloud MQTT mapping for Member B
 
 The PC gateway uses one MQTT Device API session per CoreIOT classroom entity for the project sandbox. The access token is the MQTT username and identifies that classroom. Bind it to the matching local `deviceId` in gateway configuration. Use the tenant-provided host and port, with certificate validation when TLS is available. Keep the local broker on the isolated development network. The cloud binding is based on the Core IoT connection guide and the upstream MQTT Device API. [Core IoT connection guide](https://coreiot.io/docs/ket-noi-va-gui-du-lieu/) · [ThingsBoard MQTT connection](https://thingsboard.io/docs/reference/mqtt-api/getting-connected/)
@@ -17,7 +19,7 @@ Publish at QoS 1 with retain off. Subscribe to RPC after each cloud reconnect an
 
 ### Telemetry
 
-Preserve `deviceId`, `ts`, `temperature`, `humidity`, `light`, `motion`, `distance`, `lamp`, `fan`, `door`, and `fwVersion` in the shared message. Use the device timestamp for the cloud envelope when it has synchronized Unix milliseconds and retain it as a numeric `values.ts`. When the shared `ts` is null, record gateway receipt time in the envelope and omit the null from `values` for cloud compatibility. The shared record retains `ts: null`. The JSON keys in `values` become CoreIOT telemetry keys, with the envelope timestamp attached to each reading. [ThingsBoard timestamped telemetry](https://thingsboard.io/docs/reference/mqtt-api/telemetry/) · [Upstream null handling report](https://github.com/thingsboard/thingsboard/issues/13614)
+For the current kit, forward `deviceId`, `fwVersion`, measured `humidity`, measured `temperature` when supported, and `lamp` when reported. The extended example includes the full set of hardware values. Use the device timestamp for the cloud envelope when it has synchronized Unix milliseconds and retain it as a numeric `values.ts`. When the shared `ts` is null, record gateway receipt time in the envelope and omit the null from `values` for cloud compatibility. The shared record retains `ts: null`. The JSON keys in `values` become CoreIOT telemetry keys, with the envelope timestamp attached to each reading. [ThingsBoard timestamped telemetry](https://thingsboard.io/docs/reference/mqtt-api/telemetry/) · [Upstream null handling report](https://github.com/thingsboard/thingsboard/issues/13614)
 
 ```json
 {
@@ -73,10 +75,12 @@ Before the hardware test, B must verify these behaviors in the production gatewa
 
 ### Team decisions before hardware automation and OTA
 
-- Agree the thresholds, server attributes, manual action signaling and priority rules in the [automation proposal](rules/README.md). Both dashboard and local manual actions need to set the override before a conflicting automatic command can apply. Local execution must honor an override even if a prior automatic command is already in flight. The existing shared command does not distinguish manual and automatic CoreIOT requests, so the team needs to approve that interface before enabling hardware automation.
+- Agree the thresholds, server attributes, manual action signaling and priority rules in the [humidity automation guide](minimal/AUTOMATION.md). Both dashboard and local manual actions need to set the override before a conflicting automatic command can apply. Local execution must honor an override even if a prior automatic command is already in flight. The existing shared command has one CoreIOT source value for both manual and automatic requests, so the team needs to approve the execution policy before enabling hardware automation.
 - Agree how CoreIOT package data reaches the OTA client. The dashboard MQTT binding represents the gateway session for normal operation. Choose and validate the firmware download path with Members A and B, then exercise the lab rollout in the [OTA handoff](platform/OTA.md).
 
 ## Acceptance checks
+
+Follow the [platform deployment sequence](docs/PLATFORM_DEPLOYMENT.md) for the current kit and the [evidence record](docs/VERIFICATION.md) for measurements. This table also covers the original extended kit.
 
 | Requirement | Procedure | Evidence to capture |
 | --- | --- | --- |

@@ -1,0 +1,12 @@
+{
+  "name": "${deviceName}",
+  "type": "Smart Classroom Minimal",
+  "label": "${deviceName}",
+  "additionalInfo": {
+    "gateway": false
+  },
+  "deviceProfileId": {
+    "id": "${deviceProfile.id}",
+    "entityType": "DEVICE_PROFILE"
+  }
+}
