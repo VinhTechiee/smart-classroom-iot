@@ -1,0 +1,7 @@
+{
+  "classroomHumidityMeasurement": "relative_air_humidity",
+  "classroomHumidityHigh": 80,
+  "classroomHumidityRecovery": 75,
+  "classroomAutomationEnabled": false,
+  "classroomManualOverride": true
+}

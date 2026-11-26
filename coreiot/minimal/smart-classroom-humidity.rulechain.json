@@ -1,0 +1,455 @@
+{
+  "ruleChain": {
+    "name": "Smart Classroom - Humidity",
+    "type": "CORE",
+    "root": false,
+    "additionalInfo": {
+      "description": "Relative humidity alarm and dry-run board LED automation. Attach after telemetry storage."
+    }
+  },
+  "metadata": {
+    "firstNodeIndex": 0,
+    "nodes": [
+      {
+        "type": "org.thingsboard.rule.engine.filter.TbJsFilterNode",
+        "name": "Classroom humidity only",
+        "configurationVersion": 0,
+        "configuration": {
+          "scriptLang": "JS",
+          "jsScript": "return msgType === \"POST_TELEMETRY_REQUEST\" && !!metadata && !!msg &&\n    (metadata.deviceName === \"classroom-01-sim\" || metadata.deviceName === \"classroom-01\") &&\n    msg.deviceId === metadata.deviceName && typeof msg.humidity === \"number\" &&\n    isFinite(msg.humidity) && msg.humidity >= 0 && msg.humidity <= 100;"
+        },
+        "additionalInfo": {
+          "layoutX": 220,
+          "layoutY": 250
+        }
+      },
+      {
+        "type": "org.thingsboard.rule.engine.flow.TbCheckpointNode",
+        "name": "Order by device",
+        "configurationVersion": 1,
+        "configuration": {},
+        "additionalInfo": {
+          "layoutX": 470,
+          "layoutY": 250
+        },
+        "queueName": "SequentialByOriginator"
+      },
+      {
+        "type": "org.thingsboard.rule.engine.transform.TbTransformMsgNode",
+        "name": "Preserve humidity sample",
+        "configurationVersion": 0,
+        "configuration": {
+          "scriptLang": "JS",
+          "jsScript": "return {\n    msg: {sample: {humidity: msg.humidity, lamp: msg.lamp}},\n    metadata: {deviceName: metadata.deviceName, ts: metadata.ts},\n    msgType: msgType\n};"
+        },
+        "additionalInfo": {
+          "layoutX": 720,
+          "layoutY": 250
+        }
+      },
+      {
+        "type": "org.thingsboard.rule.engine.metadata.TbGetAttributesNode",
+        "name": "Latest humidity and controls",
+        "configurationVersion": 1,
+        "configuration": {
+          "fetchTo": "DATA",
+          "clientAttributeNames": [],
+          "sharedAttributeNames": [],
+          "serverAttributeNames": [
+            "classroomHumidityMeasurement",
+            "classroomHumidityHigh",
+            "classroomHumidityRecovery",
+            "classroomAutomationEnabled",
+            "classroomManualOverride",
+            "active",
+            "classroomLastLedAttempt"
+          ],
+          "latestTsKeyNames": [
+            "humidity",
+            "lamp"
+          ],
+          "tellFailureIfAbsent": false,
+          "getLatestValueWithTs": true
+        },
+        "additionalInfo": {
+          "layoutX": 970,
+          "layoutY": 250
+        }
+      },
+      {
+        "type": "org.thingsboard.rule.engine.filter.TbJsSwitchNode",
+        "name": "Humidity alarm threshold",
+        "configurationVersion": 0,
+        "configuration": {
+          "scriptLang": "JS",
+          "jsScript": "function latestMatches(sample, ts, value) {\n    return !!sample && sample.ts === ts && sample.value === value;\n}\n\nfunction humidityRelation(now, sample) {\n    if (!sample || msg.ss_classroomHumidityMeasurement !== \"relative_air_humidity\" ||\n        typeof metadata.ts !== \"string\" || !/^\\d+$/.test(metadata.ts) ||\n        typeof sample.humidity !== \"number\" || !isFinite(sample.humidity) || sample.humidity < 0 || sample.humidity > 100) {\n        return null;\n    }\n\n    var ts = Number(metadata.ts);\n    if (now - ts > 30000 || ts - now > 5000 || !latestMatches(msg.humidity, ts, sample.humidity)) {\n        return null;\n    }\n\n    var high = msg.ss_classroomHumidityHigh;\n    var recovery = msg.ss_classroomHumidityRecovery;\n    if (high === undefined && recovery === undefined) {\n        high = 80;\n        recovery = 75;\n    }\n    if (typeof high !== \"number\" || typeof recovery !== \"number\" ||\n        !(recovery >= 0 && recovery < high && high <= 100)) return null;\n\n    if (sample.humidity >= high) return \"High\";\n    if (sample.humidity <= recovery) return \"Recovered\";\n    return null;\n}\n\nvar relation = humidityRelation(Date.now(), msg.sample);\nreturn relation ? [relation] : [];"
+        },
+        "additionalInfo": {
+          "layoutX": 1220,
+          "layoutY": 100
+        }
+      },
+      {
+        "type": "org.thingsboard.rule.engine.action.TbCreateAlarmNode",
+        "name": "Create humidity alarm",
+        "configurationVersion": 0,
+        "configuration": {
+          "alarmType": "Classroom High Humidity",
+          "scriptLang": "JS",
+          "alarmDetailsBuildJs": "return {humidity: msg.sample.humidity, sampleTs: Number(metadata.ts)};",
+          "severity": "MAJOR",
+          "useMessageAlarmData": false,
+          "propagate": false,
+          "propagateToOwner": false,
+          "propagateToOwnerHierarchy": false,
+          "propagateToTenant": false,
+          "relationTypes": []
+        },
+        "additionalInfo": {
+          "layoutX": 1470,
+          "layoutY": 50
+        }
+      },
+      {
+        "type": "org.thingsboard.rule.engine.action.TbClearAlarmNode",
+        "name": "Clear humidity alarm",
+        "configurationVersion": 0,
+        "configuration": {
+          "alarmType": "Classroom High Humidity",
+          "scriptLang": "JS",
+          "alarmDetailsBuildJs": "return {humidity: msg.sample.humidity, sampleTs: Number(metadata.ts)};"
+        },
+        "additionalInfo": {
+          "layoutX": 1470,
+          "layoutY": 150
+        }
+      },
+      {
+        "type": "org.thingsboard.rule.engine.transform.TbTransformMsgNode",
+        "name": "LED decision",
+        "configurationVersion": 0,
+        "configuration": {
+          "scriptLang": "JS",
+          "jsScript": "function latestMatches(sample, ts, value) {\n    return !!sample && sample.ts === ts && sample.value === value;\n}\n\nfunction humidityRelation(now, sample) {\n    if (!sample || msg.ss_classroomHumidityMeasurement !== \"relative_air_humidity\" ||\n        typeof metadata.ts !== \"string\" || !/^\\d+$/.test(metadata.ts) ||\n        typeof sample.humidity !== \"number\" || !isFinite(sample.humidity) || sample.humidity < 0 || sample.humidity > 100) {\n        return null;\n    }\n\n    var ts = Number(metadata.ts);\n    if (now - ts > 30000 || ts - now > 5000 || !latestMatches(msg.humidity, ts, sample.humidity)) {\n        return null;\n    }\n\n    var high = msg.ss_classroomHumidityHigh;\n    var recovery = msg.ss_classroomHumidityRecovery;\n    if (high === undefined && recovery === undefined) {\n        high = 80;\n        recovery = 75;\n    }\n    if (typeof high !== \"number\" || typeof recovery !== \"number\" ||\n        !(recovery >= 0 && recovery < high && high <= 100)) return null;\n\n    if (sample.humidity >= high) return \"High\";\n    if (sample.humidity <= recovery) return \"Recovered\";\n    return null;\n}\n\nfunction desiredLedState(now, sample) {\n    if (msg.ss_classroomAutomationEnabled !== true || msg.ss_classroomManualOverride !== false ||\n        msg.ss_active !== true) return null;\n\n    var relation = humidityRelation(now, sample);\n    if (!relation || typeof sample.lamp !== \"boolean\" ||\n        !latestMatches(msg.lamp, Number(metadata.ts), sample.lamp)) return null;\n\n    var desired = relation === \"High\";\n    return sample.lamp === desired ? null : desired;\n}\n\nvar skip = {msg: {}, metadata: metadata, msgType: msgType};\nvar now = Date.now();\nvar desired = desiredLedState(now, msg.sample);\nif (desired === null) return skip;\n\nvar sampleTs = Number(metadata.ts);\nif (msg.ss_classroomLastLedAttempt !== undefined) {\n    if (typeof msg.ss_classroomLastLedAttempt !== \"string\") return skip;\n    try {\n        var previous = JSON.parse(msg.ss_classroomLastLedAttempt);\n        if (!previous || !validTimestamp(previous.sampleTs) || !validTimestamp(previous.requestedAt) ||\n            previous.sampleTs >= sampleTs || now - previous.requestedAt < 12000) return skip;\n    } catch (error) {\n        return skip;\n    }\n}\n\nfunction validTimestamp(ts) {\n    return typeof ts === \"number\" && ts > 0 && isFinite(ts) && Math.floor(ts) === ts;\n}\n\nreturn {\n    msg: {classroomLastLedAttempt: JSON.stringify({sampleTs: sampleTs, requestedAt: now})},\n    metadata: {\n        deviceName: metadata.deviceName, ts: metadata.ts, notifyDevice: \"false\",\n        classroomLedSample: JSON.stringify(msg.sample),\n        classroomExpectedRpcState: String(desired), expirationTime: String(now + 10000)\n    },\n    msgType: \"POST_ATTRIBUTES_REQUEST\"\n};"
+        },
+        "additionalInfo": {
+          "layoutX": 1220,
+          "layoutY": 360
+        }
+      },
+      {
+        "type": "org.thingsboard.rule.engine.filter.TbJsFilterNode",
+        "name": "LED attempt required",
+        "configurationVersion": 0,
+        "configuration": {
+          "scriptLang": "JS",
+          "jsScript": "return msgType === \"POST_ATTRIBUTES_REQUEST\" && typeof msg.classroomLastLedAttempt === \"string\";"
+        },
+        "additionalInfo": {
+          "layoutX": 1470,
+          "layoutY": 360
+        }
+      },
+      {
+        "type": "org.thingsboard.rule.engine.telemetry.TbMsgAttributesNode",
+        "name": "Save LED attempt",
+        "configurationVersion": 3,
+        "configuration": {
+          "scope": "SERVER_SCOPE",
+          "notifyDevice": false,
+          "sendAttributesUpdatedNotification": false,
+          "updateAttributesOnlyOnValueChange": false,
+          "processingSettings": {
+            "type": "ON_EVERY_MESSAGE"
+          }
+        },
+        "additionalInfo": {
+          "layoutX": 1720,
+          "layoutY": 360
+        }
+      },
+      {
+        "type": "org.thingsboard.rule.engine.metadata.TbGetAttributesNode",
+        "name": "Recheck humidity and controls",
+        "configurationVersion": 1,
+        "configuration": {
+          "fetchTo": "DATA",
+          "clientAttributeNames": [],
+          "sharedAttributeNames": [],
+          "serverAttributeNames": [
+            "classroomHumidityMeasurement",
+            "classroomHumidityHigh",
+            "classroomHumidityRecovery",
+            "classroomAutomationEnabled",
+            "classroomManualOverride",
+            "active"
+          ],
+          "latestTsKeyNames": [
+            "humidity",
+            "lamp"
+          ],
+          "tellFailureIfAbsent": false,
+          "getLatestValueWithTs": true
+        },
+        "additionalInfo": {
+          "layoutX": 1970,
+          "layoutY": 360
+        }
+      },
+      {
+        "type": "org.thingsboard.rule.engine.transform.TbTransformMsgNode",
+        "name": "Build LED request",
+        "configurationVersion": 0,
+        "configuration": {
+          "scriptLang": "JS",
+          "jsScript": "function latestMatches(sample, ts, value) {\n    return !!sample && sample.ts === ts && sample.value === value;\n}\n\nfunction humidityRelation(now, sample) {\n    if (!sample || msg.ss_classroomHumidityMeasurement !== \"relative_air_humidity\" ||\n        typeof metadata.ts !== \"string\" || !/^\\d+$/.test(metadata.ts) ||\n        typeof sample.humidity !== \"number\" || !isFinite(sample.humidity) || sample.humidity < 0 || sample.humidity > 100) {\n        return null;\n    }\n\n    var ts = Number(metadata.ts);\n    if (now - ts > 30000 || ts - now > 5000 || !latestMatches(msg.humidity, ts, sample.humidity)) {\n        return null;\n    }\n\n    var high = msg.ss_classroomHumidityHigh;\n    var recovery = msg.ss_classroomHumidityRecovery;\n    if (high === undefined && recovery === undefined) {\n        high = 80;\n        recovery = 75;\n    }\n    if (typeof high !== \"number\" || typeof recovery !== \"number\" ||\n        !(recovery >= 0 && recovery < high && high <= 100)) return null;\n\n    if (sample.humidity >= high) return \"High\";\n    if (sample.humidity <= recovery) return \"Recovered\";\n    return null;\n}\n\nfunction desiredLedState(now, sample) {\n    if (msg.ss_classroomAutomationEnabled !== true || msg.ss_classroomManualOverride !== false ||\n        msg.ss_active !== true) return null;\n\n    var relation = humidityRelation(now, sample);\n    if (!relation || typeof sample.lamp !== \"boolean\" ||\n        !latestMatches(msg.lamp, Number(metadata.ts), sample.lamp)) return null;\n\n    var desired = relation === \"High\";\n    return sample.lamp === desired ? null : desired;\n}\n\nvar desired = desiredLedState(Date.now(), JSON.parse(metadata.classroomLedSample));\nvar state = metadata.classroomExpectedRpcState;\nreturn {\n    msg: desired !== null && String(desired) === state ? {method: \"setLamp\", params: desired} : {},\n    metadata: {\n        deviceName: metadata.deviceName, ts: metadata.ts,\n        classroomExpectedRpcState: metadata.classroomExpectedRpcState,\n        expirationTime: metadata.expirationTime, oneway: \"false\", persistent: \"false\", retries: \"0\"\n    },\n    msgType: \"POST_TELEMETRY_REQUEST\"\n};"
+        },
+        "additionalInfo": {
+          "layoutX": 2220,
+          "layoutY": 360
+        }
+      },
+      {
+        "type": "org.thingsboard.rule.engine.filter.TbJsFilterNode",
+        "name": "Valid LED command",
+        "configurationVersion": 0,
+        "configuration": {
+          "scriptLang": "JS",
+          "jsScript": "var now = Date.now();\nvar ageMs = now - Number(metadata.ts);\nreturn msg.method === \"setLamp\" && typeof msg.params === \"boolean\" &&\n    String(msg.params) === metadata.classroomExpectedRpcState &&\n    ageMs >= -5000 && ageMs <= 30000 && Number(metadata.expirationTime) > now;"
+        },
+        "additionalInfo": {
+          "layoutX": 2470,
+          "layoutY": 360
+        }
+      },
+      {
+        "type": "org.thingsboard.rule.engine.action.TbLogNode",
+        "name": "LED candidate",
+        "configurationVersion": 0,
+        "configuration": {
+          "scriptLang": "JS",
+          "jsScript": "return \"LED candidate\" + \" \" + JSON.stringify({device: metadata.deviceName, sampleTs: metadata.ts, data: msg});"
+        },
+        "additionalInfo": {
+          "layoutX": 2720,
+          "layoutY": 280
+        }
+      },
+      {
+        "type": "org.thingsboard.rule.engine.rpc.TbSendRPCRequestNode",
+        "name": "RPC LED - connect in simulator",
+        "configurationVersion": 0,
+        "configuration": {
+          "timeoutInSeconds": 10
+        },
+        "additionalInfo": {
+          "layoutX": 2720,
+          "layoutY": 440
+        }
+      },
+      {
+        "type": "org.thingsboard.rule.engine.filter.TbJsFilterNode",
+        "name": "Check device ACK",
+        "configurationVersion": 0,
+        "configuration": {
+          "scriptLang": "JS",
+          "jsScript": "// The MQTT RPC reply can arrive successfully with an application-level error.\nreturn !!msg && !!metadata && typeof msg.id === \"string\" && msg.id.length > 0 &&\n    msg.ok === true && typeof msg.actualState === \"boolean\" &&\n    metadata.classroomExpectedRpcState === String(msg.actualState);"
+        },
+        "additionalInfo": {
+          "layoutX": 2970,
+          "layoutY": 440
+        }
+      },
+      {
+        "type": "org.thingsboard.rule.engine.action.TbLogNode",
+        "name": "LED ACK accepted",
+        "configurationVersion": 0,
+        "configuration": {
+          "scriptLang": "JS",
+          "jsScript": "return \"LED ACK accepted\" + \" \" + JSON.stringify({device: metadata.deviceName, sampleTs: metadata.ts, data: msg});"
+        },
+        "additionalInfo": {
+          "layoutX": 3220,
+          "layoutY": 340
+        }
+      },
+      {
+        "type": "org.thingsboard.rule.engine.action.TbLogNode",
+        "name": "LED ACK rejected",
+        "configurationVersion": 0,
+        "configuration": {
+          "scriptLang": "JS",
+          "jsScript": "return \"LED ACK rejected\" + \" \" + JSON.stringify({device: metadata.deviceName, sampleTs: metadata.ts, data: msg});"
+        },
+        "additionalInfo": {
+          "layoutX": 3220,
+          "layoutY": 440
+        }
+      },
+      {
+        "type": "org.thingsboard.rule.engine.action.TbLogNode",
+        "name": "LED RPC failed or timed out",
+        "configurationVersion": 0,
+        "configuration": {
+          "scriptLang": "JS",
+          "jsScript": "return \"LED RPC failed or timed out\" + \" \" + JSON.stringify({device: metadata.deviceName, sampleTs: metadata.ts, data: msg});"
+        },
+        "additionalInfo": {
+          "layoutX": 3220,
+          "layoutY": 540
+        }
+      },
+      {
+        "type": "org.thingsboard.rule.engine.action.TbLogNode",
+        "name": "Humidity rule processing failed",
+        "configurationVersion": 0,
+        "configuration": {
+          "scriptLang": "JS",
+          "jsScript": "return \"Humidity rule processing failed\" + \" \" + JSON.stringify({device: metadata.deviceName, sampleTs: metadata.ts, data: msg});"
+        },
+        "additionalInfo": {
+          "layoutX": 1470,
+          "layoutY": 620
+        }
+      }
+    ],
+    "connections": [
+      {
+        "fromIndex": 0,
+        "toIndex": 1,
+        "type": "True"
+      },
+      {
+        "fromIndex": 1,
+        "toIndex": 2,
+        "type": "Success"
+      },
+      {
+        "fromIndex": 2,
+        "toIndex": 3,
+        "type": "Success"
+      },
+      {
+        "fromIndex": 3,
+        "toIndex": 4,
+        "type": "Success"
+      },
+      {
+        "fromIndex": 4,
+        "toIndex": 5,
+        "type": "High"
+      },
+      {
+        "fromIndex": 4,
+        "toIndex": 6,
+        "type": "Recovered"
+      },
+      {
+        "fromIndex": 3,
+        "toIndex": 7,
+        "type": "Success"
+      },
+      {
+        "fromIndex": 7,
+        "toIndex": 8,
+        "type": "Success"
+      },
+      {
+        "fromIndex": 8,
+        "toIndex": 9,
+        "type": "True"
+      },
+      {
+        "fromIndex": 9,
+        "toIndex": 10,
+        "type": "Success"
+      },
+      {
+        "fromIndex": 10,
+        "toIndex": 11,
+        "type": "Success"
+      },
+      {
+        "fromIndex": 11,
+        "toIndex": 12,
+        "type": "Success"
+      },
+      {
+        "fromIndex": 12,
+        "toIndex": 13,
+        "type": "True"
+      },
+      {
+        "fromIndex": 14,
+        "toIndex": 15,
+        "type": "Success"
+      },
+      {
+        "fromIndex": 14,
+        "toIndex": 18,
+        "type": "Failure"
+      },
+      {
+        "fromIndex": 15,
+        "toIndex": 16,
+        "type": "True"
+      },
+      {
+        "fromIndex": 15,
+        "toIndex": 17,
+        "type": "False"
+      },
+      {
+        "fromIndex": 1,
+        "toIndex": 19,
+        "type": "Failure"
+      },
+      {
+        "fromIndex": 2,
+        "toIndex": 19,
+        "type": "Failure"
+      },
+      {
+        "fromIndex": 3,
+        "toIndex": 19,
+        "type": "Failure"
+      },
+      {
+        "fromIndex": 4,
+        "toIndex": 19,
+        "type": "Failure"
+      },
+      {
+        "fromIndex": 5,
+        "toIndex": 19,
+        "type": "Failure"
+      },
+      {
+        "fromIndex": 6,
+        "toIndex": 19,
+        "type": "Failure"
+      },
+      {
+        "fromIndex": 7,
+        "toIndex": 19,
+        "type": "Failure"
+      },
+      {
+        "fromIndex": 9,
+        "toIndex": 19,
+        "type": "Failure"
+      },
+      {
+        "fromIndex": 10,
+        "toIndex": 19,
+        "type": "Failure"
+      },
+      {
+        "fromIndex": 11,
+        "toIndex": 19,
+        "type": "Failure"
+      }
+    ],
+    "ruleChainConnections": null
+  }
+}

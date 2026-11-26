@@ -1,0 +1,931 @@
+{
+  "title": "Smart Classroom",
+  "configuration": {
+    "widgets": {
+      "80ef0f9d-8edb-43d5-95f1-af0fbc809101": {
+        "id": "80ef0f9d-8edb-43d5-95f1-af0fbc809101",
+        "typeFullFqn": "system.cards.entities_table",
+        "isSystemType": true,
+        "bundleAlias": "cards",
+        "typeAlias": "entities_table",
+        "type": "latest",
+        "row": 4,
+        "col": 0,
+        "sizeX": 12,
+        "sizeY": 4,
+        "config": {
+          "title": "Environmental monitoring",
+          "showTitle": true,
+          "backgroundColor": "#ffffff",
+          "color": "#26354a",
+          "padding": "8px",
+          "dropShadow": true,
+          "enableFullscreen": true,
+          "actions": {},
+          "datasources": [
+            {
+              "type": "entity",
+              "entityAliasId": "80ef0f9d-8edb-43d5-95f1-af0fbc809100",
+              "dataKeys": [
+                {
+                  "name": "temperature",
+                  "label": "Temperature (°C)",
+                  "type": "timeseries",
+                  "color": "#ad442c",
+                  "settings": {}
+                },
+                {
+                  "name": "humidity",
+                  "label": "Humidity (%)",
+                  "type": "timeseries",
+                  "color": "#236c94",
+                  "settings": {}
+                },
+                {
+                  "name": "light",
+                  "label": "Light (raw)",
+                  "type": "timeseries",
+                  "color": "#886420",
+                  "settings": {}
+                },
+                {
+                  "name": "motion",
+                  "label": "Motion",
+                  "type": "timeseries",
+                  "color": "#526884",
+                  "settings": {},
+                  "usePostProcessing": true,
+                  "postFuncBody": "if (value === true || value === \"true\") return \"Detected\";\nif (value === false || value === \"false\") return \"Clear\";\nreturn \"Unknown\";"
+                },
+                {
+                  "name": "distance",
+                  "label": "Distance (cm)",
+                  "type": "timeseries",
+                  "color": "#526884",
+                  "settings": {}
+                }
+              ]
+            }
+          ],
+          "settings": {
+            "entitiesTitle": "Environmental monitoring",
+            "enableSearch": false,
+            "enableSelectColumnDisplay": false,
+            "enableStickyHeader": true,
+            "displayEntityName": false,
+            "displayEntityLabel": false,
+            "displayEntityType": false,
+            "displayPagination": false,
+            "defaultPageSize": 10
+          }
+        }
+      },
+      "80ef0f9d-8edb-43d5-95f1-af0fbc809102": {
+        "id": "80ef0f9d-8edb-43d5-95f1-af0fbc809102",
+        "typeFullFqn": "system.cards.entities_table",
+        "isSystemType": true,
+        "bundleAlias": "cards",
+        "typeAlias": "entities_table",
+        "type": "latest",
+        "row": 4,
+        "col": 12,
+        "sizeX": 12,
+        "sizeY": 4,
+        "config": {
+          "title": "Actuator monitoring (last reported)",
+          "showTitle": true,
+          "backgroundColor": "#ffffff",
+          "color": "#26354a",
+          "padding": "8px",
+          "dropShadow": true,
+          "enableFullscreen": true,
+          "actions": {},
+          "datasources": [
+            {
+              "type": "entity",
+              "entityAliasId": "80ef0f9d-8edb-43d5-95f1-af0fbc809100",
+              "dataKeys": [
+                {
+                  "name": "lamp",
+                  "label": "Lamp",
+                  "type": "timeseries",
+                  "color": "#526884",
+                  "settings": {},
+                  "usePostProcessing": true,
+                  "postFuncBody": "if (value === true || value === \"true\") return \"On\";\nif (value === false || value === \"false\") return \"Off\";\nreturn \"Unknown\";"
+                },
+                {
+                  "name": "fan",
+                  "label": "Fan",
+                  "type": "timeseries",
+                  "color": "#526884",
+                  "settings": {},
+                  "usePostProcessing": true,
+                  "postFuncBody": "if (value === true || value === \"true\") return \"On\";\nif (value === false || value === \"false\") return \"Off\";\nreturn \"Unknown\";"
+                },
+                {
+                  "name": "door",
+                  "label": "Door",
+                  "type": "timeseries",
+                  "color": "#526884",
+                  "settings": {},
+                  "usePostProcessing": true,
+                  "postFuncBody": "if (value === true || value === \"true\") return \"Open\";\nif (value === false || value === \"false\") return \"Closed\";\nreturn \"Unknown\";"
+                }
+              ]
+            }
+          ],
+          "settings": {
+            "entitiesTitle": "Actuator monitoring (last reported)",
+            "enableSearch": false,
+            "enableSelectColumnDisplay": false,
+            "enableStickyHeader": true,
+            "displayEntityName": false,
+            "displayEntityLabel": false,
+            "displayEntityType": false,
+            "displayPagination": false,
+            "defaultPageSize": 10
+          }
+        }
+      },
+      "80ef0f9d-8edb-43d5-95f1-af0fbc809103": {
+        "id": "80ef0f9d-8edb-43d5-95f1-af0fbc809103",
+        "typeFullFqn": "system.control_widgets.rpcbutton",
+        "isSystemType": true,
+        "bundleAlias": "control_widgets",
+        "typeAlias": "rpcbutton",
+        "type": "rpc",
+        "row": 8,
+        "col": 0,
+        "sizeX": 4,
+        "sizeY": 2,
+        "config": {
+          "title": "Lamp on",
+          "showTitle": false,
+          "backgroundColor": "#ffffff",
+          "color": "#26354a",
+          "padding": "0px",
+          "dropShadow": true,
+          "enableFullscreen": false,
+          "targetDevice": {
+            "type": "entity",
+            "entityAliasId": "80ef0f9d-8edb-43d5-95f1-af0fbc809100"
+          },
+          "targetDeviceAliasIds": [
+            "80ef0f9d-8edb-43d5-95f1-af0fbc809100"
+          ],
+          "settings": {
+            "requestTimeout": 10000,
+            "oneWayElseTwoWay": false,
+            "requestPersistent": false,
+            "showError": true,
+            "buttonText": "Lamp on",
+            "styleButton": {
+              "isRaised": true,
+              "isPrimary": true
+            },
+            "methodName": "setLamp",
+            "methodParams": "true"
+          }
+        }
+      },
+      "80ef0f9d-8edb-43d5-95f1-af0fbc809104": {
+        "id": "80ef0f9d-8edb-43d5-95f1-af0fbc809104",
+        "typeFullFqn": "system.control_widgets.rpcbutton",
+        "isSystemType": true,
+        "bundleAlias": "control_widgets",
+        "typeAlias": "rpcbutton",
+        "type": "rpc",
+        "row": 8,
+        "col": 4,
+        "sizeX": 4,
+        "sizeY": 2,
+        "config": {
+          "title": "Lamp off",
+          "showTitle": false,
+          "backgroundColor": "#ffffff",
+          "color": "#26354a",
+          "padding": "0px",
+          "dropShadow": true,
+          "enableFullscreen": false,
+          "targetDevice": {
+            "type": "entity",
+            "entityAliasId": "80ef0f9d-8edb-43d5-95f1-af0fbc809100"
+          },
+          "targetDeviceAliasIds": [
+            "80ef0f9d-8edb-43d5-95f1-af0fbc809100"
+          ],
+          "settings": {
+            "requestTimeout": 10000,
+            "oneWayElseTwoWay": false,
+            "requestPersistent": false,
+            "showError": true,
+            "buttonText": "Lamp off",
+            "styleButton": {
+              "isRaised": true,
+              "isPrimary": true
+            },
+            "methodName": "setLamp",
+            "methodParams": "false"
+          }
+        }
+      },
+      "80ef0f9d-8edb-43d5-95f1-af0fbc809105": {
+        "id": "80ef0f9d-8edb-43d5-95f1-af0fbc809105",
+        "typeFullFqn": "system.control_widgets.rpcbutton",
+        "isSystemType": true,
+        "bundleAlias": "control_widgets",
+        "typeAlias": "rpcbutton",
+        "type": "rpc",
+        "row": 8,
+        "col": 8,
+        "sizeX": 4,
+        "sizeY": 2,
+        "config": {
+          "title": "Fan on",
+          "showTitle": false,
+          "backgroundColor": "#ffffff",
+          "color": "#26354a",
+          "padding": "0px",
+          "dropShadow": true,
+          "enableFullscreen": false,
+          "targetDevice": {
+            "type": "entity",
+            "entityAliasId": "80ef0f9d-8edb-43d5-95f1-af0fbc809100"
+          },
+          "targetDeviceAliasIds": [
+            "80ef0f9d-8edb-43d5-95f1-af0fbc809100"
+          ],
+          "settings": {
+            "requestTimeout": 10000,
+            "oneWayElseTwoWay": false,
+            "requestPersistent": false,
+            "showError": true,
+            "buttonText": "Fan on",
+            "styleButton": {
+              "isRaised": true,
+              "isPrimary": true
+            },
+            "methodName": "setFan",
+            "methodParams": "true"
+          }
+        }
+      },
+      "80ef0f9d-8edb-43d5-95f1-af0fbc809106": {
+        "id": "80ef0f9d-8edb-43d5-95f1-af0fbc809106",
+        "typeFullFqn": "system.control_widgets.rpcbutton",
+        "isSystemType": true,
+        "bundleAlias": "control_widgets",
+        "typeAlias": "rpcbutton",
+        "type": "rpc",
+        "row": 8,
+        "col": 12,
+        "sizeX": 4,
+        "sizeY": 2,
+        "config": {
+          "title": "Fan off",
+          "showTitle": false,
+          "backgroundColor": "#ffffff",
+          "color": "#26354a",
+          "padding": "0px",
+          "dropShadow": true,
+          "enableFullscreen": false,
+          "targetDevice": {
+            "type": "entity",
+            "entityAliasId": "80ef0f9d-8edb-43d5-95f1-af0fbc809100"
+          },
+          "targetDeviceAliasIds": [
+            "80ef0f9d-8edb-43d5-95f1-af0fbc809100"
+          ],
+          "settings": {
+            "requestTimeout": 10000,
+            "oneWayElseTwoWay": false,
+            "requestPersistent": false,
+            "showError": true,
+            "buttonText": "Fan off",
+            "styleButton": {
+              "isRaised": true,
+              "isPrimary": true
+            },
+            "methodName": "setFan",
+            "methodParams": "false"
+          }
+        }
+      },
+      "80ef0f9d-8edb-43d5-95f1-af0fbc809107": {
+        "id": "80ef0f9d-8edb-43d5-95f1-af0fbc809107",
+        "typeFullFqn": "system.control_widgets.rpcbutton",
+        "isSystemType": true,
+        "bundleAlias": "control_widgets",
+        "typeAlias": "rpcbutton",
+        "type": "rpc",
+        "row": 8,
+        "col": 16,
+        "sizeX": 4,
+        "sizeY": 2,
+        "config": {
+          "title": "Door open",
+          "showTitle": false,
+          "backgroundColor": "#ffffff",
+          "color": "#26354a",
+          "padding": "0px",
+          "dropShadow": true,
+          "enableFullscreen": false,
+          "targetDevice": {
+            "type": "entity",
+            "entityAliasId": "80ef0f9d-8edb-43d5-95f1-af0fbc809100"
+          },
+          "targetDeviceAliasIds": [
+            "80ef0f9d-8edb-43d5-95f1-af0fbc809100"
+          ],
+          "settings": {
+            "requestTimeout": 10000,
+            "oneWayElseTwoWay": false,
+            "requestPersistent": false,
+            "showError": true,
+            "buttonText": "Door open",
+            "styleButton": {
+              "isRaised": true,
+              "isPrimary": true
+            },
+            "methodName": "setDoor",
+            "methodParams": "true"
+          }
+        }
+      },
+      "80ef0f9d-8edb-43d5-95f1-af0fbc809108": {
+        "id": "80ef0f9d-8edb-43d5-95f1-af0fbc809108",
+        "typeFullFqn": "system.control_widgets.rpcbutton",
+        "isSystemType": true,
+        "bundleAlias": "control_widgets",
+        "typeAlias": "rpcbutton",
+        "type": "rpc",
+        "row": 8,
+        "col": 20,
+        "sizeX": 4,
+        "sizeY": 2,
+        "config": {
+          "title": "Door close",
+          "showTitle": false,
+          "backgroundColor": "#ffffff",
+          "color": "#26354a",
+          "padding": "0px",
+          "dropShadow": true,
+          "enableFullscreen": false,
+          "targetDevice": {
+            "type": "entity",
+            "entityAliasId": "80ef0f9d-8edb-43d5-95f1-af0fbc809100"
+          },
+          "targetDeviceAliasIds": [
+            "80ef0f9d-8edb-43d5-95f1-af0fbc809100"
+          ],
+          "settings": {
+            "requestTimeout": 10000,
+            "oneWayElseTwoWay": false,
+            "requestPersistent": false,
+            "showError": true,
+            "buttonText": "Door close",
+            "styleButton": {
+              "isRaised": true,
+              "isPrimary": true
+            },
+            "methodName": "setDoor",
+            "methodParams": "false"
+          }
+        }
+      },
+      "80ef0f9d-8edb-43d5-95f1-af0fbc809109": {
+        "id": "80ef0f9d-8edb-43d5-95f1-af0fbc809109",
+        "typeFullFqn": "system.charts.basic_timeseries",
+        "isSystemType": true,
+        "bundleAlias": "charts",
+        "typeAlias": "basic_timeseries",
+        "type": "timeseries",
+        "row": 15,
+        "col": 0,
+        "sizeX": 12,
+        "sizeY": 6,
+        "config": {
+          "title": "Temperature (°C)",
+          "showTitle": true,
+          "backgroundColor": "#ffffff",
+          "color": "#26354a",
+          "padding": "8px",
+          "dropShadow": true,
+          "enableFullscreen": true,
+          "actions": {},
+          "datasources": [
+            {
+              "type": "entity",
+              "entityAliasId": "80ef0f9d-8edb-43d5-95f1-af0fbc809100",
+              "dataKeys": [
+                {
+                  "name": "temperature",
+                  "label": "Temperature (°C)",
+                  "type": "timeseries",
+                  "color": "#ad442c",
+                  "settings": {
+                    "showLines": true,
+                    "fillLines": false,
+                    "showPoints": true
+                  }
+                }
+              ]
+            }
+          ],
+          "useDashboardTimewindow": true,
+          "settings": {
+            "showTooltip": true,
+            "showLegend": false,
+            "fontSize": 11,
+            "fontColor": "#46546a",
+            "xaxis": {
+              "showLabels": true
+            },
+            "yaxis": {
+              "showLabels": true
+            },
+            "grid": {
+              "verticalLines": false,
+              "horizontalLines": true,
+              "outlineWidth": 1,
+              "color": "#526884",
+              "tickColor": "#e3e8ef"
+            },
+            "shadowSize": 0
+          }
+        }
+      },
+      "80ef0f9d-8edb-43d5-95f1-af0fbc809110": {
+        "id": "80ef0f9d-8edb-43d5-95f1-af0fbc809110",
+        "typeFullFqn": "system.charts.basic_timeseries",
+        "isSystemType": true,
+        "bundleAlias": "charts",
+        "typeAlias": "basic_timeseries",
+        "type": "timeseries",
+        "row": 15,
+        "col": 12,
+        "sizeX": 12,
+        "sizeY": 6,
+        "config": {
+          "title": "Humidity (%)",
+          "showTitle": true,
+          "backgroundColor": "#ffffff",
+          "color": "#26354a",
+          "padding": "8px",
+          "dropShadow": true,
+          "enableFullscreen": true,
+          "actions": {},
+          "datasources": [
+            {
+              "type": "entity",
+              "entityAliasId": "80ef0f9d-8edb-43d5-95f1-af0fbc809100",
+              "dataKeys": [
+                {
+                  "name": "humidity",
+                  "label": "Humidity (%)",
+                  "type": "timeseries",
+                  "color": "#236c94",
+                  "settings": {
+                    "showLines": true,
+                    "fillLines": false,
+                    "showPoints": true
+                  }
+                }
+              ]
+            }
+          ],
+          "useDashboardTimewindow": true,
+          "settings": {
+            "showTooltip": true,
+            "showLegend": false,
+            "fontSize": 11,
+            "fontColor": "#46546a",
+            "xaxis": {
+              "showLabels": true
+            },
+            "yaxis": {
+              "showLabels": true
+            },
+            "grid": {
+              "verticalLines": false,
+              "horizontalLines": true,
+              "outlineWidth": 1,
+              "color": "#526884",
+              "tickColor": "#e3e8ef"
+            },
+            "shadowSize": 0
+          }
+        }
+      },
+      "80ef0f9d-8edb-43d5-95f1-af0fbc809111": {
+        "id": "80ef0f9d-8edb-43d5-95f1-af0fbc809111",
+        "typeFullFqn": "system.cards.entities_table",
+        "isSystemType": true,
+        "bundleAlias": "cards",
+        "typeAlias": "entities_table",
+        "type": "latest",
+        "row": 0,
+        "col": 0,
+        "sizeX": 24,
+        "sizeY": 4,
+        "config": {
+          "title": "System monitoring",
+          "showTitle": true,
+          "backgroundColor": "#ffffff",
+          "color": "#26354a",
+          "padding": "8px",
+          "dropShadow": true,
+          "enableFullscreen": true,
+          "actions": {},
+          "datasources": [
+            {
+              "type": "entity",
+              "entityAliasId": "80ef0f9d-8edb-43d5-95f1-af0fbc809100",
+              "dataKeys": [
+                {
+                  "name": "deviceId",
+                  "label": "Device ID",
+                  "type": "timeseries",
+                  "color": "#526884",
+                  "settings": {}
+                },
+                {
+                  "name": "active",
+                  "label": "CoreIOT activity",
+                  "type": "attribute",
+                  "color": "#526884",
+                  "settings": {},
+                  "usePostProcessing": true,
+                  "postFuncBody": "if (value === true || value === \"true\") return \"Active\";\nif (value === false || value === \"false\") return \"Inactive\";\nreturn \"Unknown\";"
+                },
+                {
+                  "name": "fwVersion",
+                  "label": "Firmware version",
+                  "type": "timeseries",
+                  "color": "#526884",
+                  "settings": {}
+                },
+                {
+                  "name": "temperature",
+                  "label": "Last telemetry update (UTC)",
+                  "type": "timeseries",
+                  "color": "#526884",
+                  "settings": {},
+                  "usePostProcessing": true,
+                  "postFuncBody": "var timestamp = Number(time);\nif (!isFinite(timestamp) || timestamp <= 0 || timestamp > 8640000000000000) return \"Unknown\";\nreturn new Date(timestamp).toISOString();"
+                }
+              ]
+            }
+          ],
+          "settings": {
+            "entitiesTitle": "System monitoring",
+            "enableSearch": false,
+            "enableSelectColumnDisplay": false,
+            "enableStickyHeader": true,
+            "displayEntityName": false,
+            "displayEntityLabel": false,
+            "displayEntityType": false,
+            "displayPagination": false,
+            "defaultPageSize": 10
+          }
+        }
+      },
+      "80ef0f9d-8edb-43d5-95f1-af0fbc809112": {
+        "id": "80ef0f9d-8edb-43d5-95f1-af0fbc809112",
+        "typeFullFqn": "system.charts.basic_timeseries",
+        "isSystemType": true,
+        "bundleAlias": "charts",
+        "typeAlias": "basic_timeseries",
+        "type": "timeseries",
+        "row": 10,
+        "col": 0,
+        "sizeX": 24,
+        "sizeY": 5,
+        "config": {
+          "title": "Recent temperature samples (30 s)",
+          "showTitle": true,
+          "backgroundColor": "#ffffff",
+          "color": "#26354a",
+          "padding": "8px",
+          "dropShadow": true,
+          "enableFullscreen": true,
+          "actions": {},
+          "datasources": [
+            {
+              "type": "entity",
+              "entityAliasId": "80ef0f9d-8edb-43d5-95f1-af0fbc809100",
+              "dataKeys": [
+                {
+                  "name": "temperature",
+                  "label": "Temperature (°C)",
+                  "type": "timeseries",
+                  "color": "#ad442c",
+                  "settings": {
+                    "showLines": false,
+                    "fillLines": false,
+                    "showPoints": true
+                  }
+                }
+              ]
+            }
+          ],
+          "useDashboardTimewindow": false,
+          "settings": {
+            "showTooltip": true,
+            "showLegend": false,
+            "fontSize": 11,
+            "fontColor": "#46546a",
+            "xaxis": {
+              "showLabels": true
+            },
+            "yaxis": {
+              "showLabels": true
+            },
+            "grid": {
+              "verticalLines": false,
+              "horizontalLines": true,
+              "outlineWidth": 1,
+              "color": "#526884",
+              "tickColor": "#e3e8ef"
+            },
+            "shadowSize": 0
+          },
+          "timewindow": {
+            "selectedTab": 0,
+            "realtime": {
+              "realtimeType": 0,
+              "timewindowMs": 30000,
+              "interval": 1000
+            },
+            "aggregation": {
+              "type": "NONE",
+              "limit": 40
+            }
+          }
+        }
+      },
+      "80ef0f9d-8edb-43d5-95f1-af0fbc809113": {
+        "id": "80ef0f9d-8edb-43d5-95f1-af0fbc809113",
+        "typeFullFqn": "system.charts.basic_timeseries",
+        "isSystemType": true,
+        "bundleAlias": "charts",
+        "typeAlias": "basic_timeseries",
+        "type": "timeseries",
+        "row": 21,
+        "col": 0,
+        "sizeX": 12,
+        "sizeY": 6,
+        "config": {
+          "title": "Light-level history (raw)",
+          "showTitle": true,
+          "backgroundColor": "#ffffff",
+          "color": "#26354a",
+          "padding": "8px",
+          "dropShadow": true,
+          "enableFullscreen": true,
+          "actions": {},
+          "datasources": [
+            {
+              "type": "entity",
+              "entityAliasId": "80ef0f9d-8edb-43d5-95f1-af0fbc809100",
+              "dataKeys": [
+                {
+                  "name": "light",
+                  "label": "Light (raw)",
+                  "type": "timeseries",
+                  "color": "#886420",
+                  "settings": {
+                    "showLines": true,
+                    "fillLines": false,
+                    "showPoints": true
+                  }
+                }
+              ]
+            }
+          ],
+          "useDashboardTimewindow": true,
+          "settings": {
+            "showTooltip": true,
+            "showLegend": false,
+            "fontSize": 11,
+            "fontColor": "#46546a",
+            "xaxis": {
+              "showLabels": true
+            },
+            "yaxis": {
+              "showLabels": true
+            },
+            "grid": {
+              "verticalLines": false,
+              "horizontalLines": true,
+              "outlineWidth": 1,
+              "color": "#526884",
+              "tickColor": "#e3e8ef"
+            },
+            "shadowSize": 0
+          }
+        }
+      },
+      "80ef0f9d-8edb-43d5-95f1-af0fbc809114": {
+        "id": "80ef0f9d-8edb-43d5-95f1-af0fbc809114",
+        "typeFullFqn": "system.cards.timeseries_table",
+        "isSystemType": true,
+        "bundleAlias": "cards",
+        "typeAlias": "timeseries_table",
+        "type": "timeseries",
+        "row": 21,
+        "col": 12,
+        "sizeX": 12,
+        "sizeY": 6,
+        "config": {
+          "title": "Actuator history",
+          "showTitle": true,
+          "backgroundColor": "#ffffff",
+          "color": "#26354a",
+          "padding": "8px",
+          "dropShadow": true,
+          "enableFullscreen": true,
+          "actions": {},
+          "datasources": [
+            {
+              "type": "entity",
+              "entityAliasId": "80ef0f9d-8edb-43d5-95f1-af0fbc809100",
+              "dataKeys": [
+                {
+                  "name": "lamp",
+                  "label": "Lamp",
+                  "type": "timeseries",
+                  "color": "#526884",
+                  "settings": {},
+                  "usePostProcessing": true,
+                  "postFuncBody": "if (value === true || value === \"true\") return \"On\";\nif (value === false || value === \"false\") return \"Off\";\nreturn \"Unknown\";"
+                },
+                {
+                  "name": "fan",
+                  "label": "Fan",
+                  "type": "timeseries",
+                  "color": "#526884",
+                  "settings": {},
+                  "usePostProcessing": true,
+                  "postFuncBody": "if (value === true || value === \"true\") return \"On\";\nif (value === false || value === \"false\") return \"Off\";\nreturn \"Unknown\";"
+                },
+                {
+                  "name": "door",
+                  "label": "Door",
+                  "type": "timeseries",
+                  "color": "#526884",
+                  "settings": {},
+                  "usePostProcessing": true,
+                  "postFuncBody": "if (value === true || value === \"true\") return \"Open\";\nif (value === false || value === \"false\") return \"Closed\";\nreturn \"Unknown\";"
+                }
+              ]
+            }
+          ],
+          "useDashboardTimewindow": true,
+          "showLegend": false,
+          "settings": {
+            "showTimestamp": true,
+            "displayPagination": true,
+            "defaultPageSize": 5,
+            "enableSearch": false,
+            "enableSelectColumnDisplay": false
+          }
+        }
+      }
+    },
+    "states": {
+      "default": {
+        "name": "Smart Classroom",
+        "root": true,
+        "layouts": {
+          "main": {
+            "widgets": {
+              "80ef0f9d-8edb-43d5-95f1-af0fbc809101": {
+                "row": 4,
+                "col": 0,
+                "sizeX": 12,
+                "sizeY": 4
+              },
+              "80ef0f9d-8edb-43d5-95f1-af0fbc809102": {
+                "row": 4,
+                "col": 12,
+                "sizeX": 12,
+                "sizeY": 4
+              },
+              "80ef0f9d-8edb-43d5-95f1-af0fbc809103": {
+                "row": 8,
+                "col": 0,
+                "sizeX": 4,
+                "sizeY": 2
+              },
+              "80ef0f9d-8edb-43d5-95f1-af0fbc809104": {
+                "row": 8,
+                "col": 4,
+                "sizeX": 4,
+                "sizeY": 2
+              },
+              "80ef0f9d-8edb-43d5-95f1-af0fbc809105": {
+                "row": 8,
+                "col": 8,
+                "sizeX": 4,
+                "sizeY": 2
+              },
+              "80ef0f9d-8edb-43d5-95f1-af0fbc809106": {
+                "row": 8,
+                "col": 12,
+                "sizeX": 4,
+                "sizeY": 2
+              },
+              "80ef0f9d-8edb-43d5-95f1-af0fbc809107": {
+                "row": 8,
+                "col": 16,
+                "sizeX": 4,
+                "sizeY": 2
+              },
+              "80ef0f9d-8edb-43d5-95f1-af0fbc809108": {
+                "row": 8,
+                "col": 20,
+                "sizeX": 4,
+                "sizeY": 2
+              },
+              "80ef0f9d-8edb-43d5-95f1-af0fbc809109": {
+                "row": 15,
+                "col": 0,
+                "sizeX": 12,
+                "sizeY": 6
+              },
+              "80ef0f9d-8edb-43d5-95f1-af0fbc809110": {
+                "row": 15,
+                "col": 12,
+                "sizeX": 12,
+                "sizeY": 6
+              },
+              "80ef0f9d-8edb-43d5-95f1-af0fbc809111": {
+                "row": 0,
+                "col": 0,
+                "sizeX": 24,
+                "sizeY": 4
+              },
+              "80ef0f9d-8edb-43d5-95f1-af0fbc809112": {
+                "row": 10,
+                "col": 0,
+                "sizeX": 24,
+                "sizeY": 5
+              },
+              "80ef0f9d-8edb-43d5-95f1-af0fbc809113": {
+                "row": 21,
+                "col": 0,
+                "sizeX": 12,
+                "sizeY": 6
+              },
+              "80ef0f9d-8edb-43d5-95f1-af0fbc809114": {
+                "row": 21,
+                "col": 12,
+                "sizeX": 12,
+                "sizeY": 6
+              }
+            },
+            "gridSettings": {
+              "layoutType": "default",
+              "columns": 24,
+              "margin": 10,
+              "outerMargin": true,
+              "backgroundColor": "#f1f4f8"
+            }
+          }
+        }
+      }
+    },
+    "entityAliases": {
+      "80ef0f9d-8edb-43d5-95f1-af0fbc809100": {
+        "id": "80ef0f9d-8edb-43d5-95f1-af0fbc809100",
+        "alias": "Classroom",
+        "filter": {
+          "type": "entityName",
+          "resolveMultiple": false,
+          "entityType": "DEVICE",
+          "entityNameFilter": "__select_classroom_device_in_entity_aliases__"
+        }
+      }
+    },
+    "filters": {},
+    "timewindow": {
+      "selectedTab": 0,
+      "realtime": {
+        "realtimeType": 0,
+        "timewindowMs": 1800000,
+        "interval": 1000
+      },
+      "aggregation": {
+        "type": "NONE",
+        "limit": 1000
+      }
+    },
+    "settings": {
+      "stateControllerId": "default",
+      "showTitle": true,
+      "showDashboardTimewindow": true
+    }
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "name": "Smart Classroom - High Humidity Created",
+  "enabled": false,
+  "templateId": {
+    "entityType": "NOTIFICATION_TEMPLATE",
+    "id": "${notificationTemplateId}"
+  },
+  "triggerType": "ALARM",
+  "triggerConfig": {
+    "triggerType": "ALARM",
+    "alarmTypes": ["Classroom High Humidity"],
+    "alarmSeverities": ["MAJOR"],
+    "notifyOn": ["CREATED"]
+  },
+  "recipientsConfig": {
+    "triggerType": "ALARM",
+    "escalationTable": {
+      "0": ["${notificationTargetId}"]
+    }
+  },
+  "additionalConfig": {
+    "description": "Send one Web notification to the demo recipient when a major classroom humidity alarm opens."
+  }
+}

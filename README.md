@@ -2,7 +2,15 @@
 
 An IoT-based classroom monitoring and automation system developed for the Internet of Things course at HCMUT (Semester 261). The system integrates YoloUNO (ESP32-S3), an AIoT Kit, a PC gateway, and CoreIOT.
 
-**Status:** Development planned; physical integration and validation pending.
+**Status:** CoreIOT configuration and local verification completed. Platform deployment, physical integration, and system validation are in progress.
+
+The current hardware configuration focuses on humidity monitoring and board LED control using Yolo UNO. Extended features depend on hardware availability.
+
+Member C's implementation includes dashboard configurations, RuleChain automation, notifications, OTA delivery verification, and a Python integration simulator.
+
+- [CoreIOT Deployment Guide](coreiot/docs/PLATFORM_DEPLOYMENT.md)
+- [Demo Guide](coreiot/docs/DEMO.md)
+- [Verification Record](coreiot/docs/VERIFICATION.md)
 
 ## 1. System Architecture
 

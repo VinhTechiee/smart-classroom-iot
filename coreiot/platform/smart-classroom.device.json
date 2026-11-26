@@ -1,0 +1,9 @@
+{
+  "name": "${deviceName}",
+  "type": "Smart Classroom",
+  "label": "${deviceName}",
+  "deviceProfileId": {
+    "id": "${deviceProfile.id}",
+    "entityType": "DEVICE_PROFILE"
+  }
+}
