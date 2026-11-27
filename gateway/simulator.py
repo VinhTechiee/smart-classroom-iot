@@ -5,6 +5,7 @@ import json
 import math
 import os
 import sys
+from random import uniform
 from threading import TIMEOUT_MAX, Event, Lock
 
 import paho.mqtt.client as mqtt
@@ -23,6 +24,7 @@ def main():
     parser.add_argument("--minimal", action="store_true", help="Only simulate humidity and the board LED")
     parser.add_argument("--humidity", type=float, default=65.0, help="Synthetic relative humidity in percent")
     parser.add_argument("--temperature", type=float, help="Include a synthetic temperature in Celsius")
+    parser.add_argument("--random", action="store_true", help="Generate random humidity (0-100%% RH) and temperature (20-40 C)")
     parser.add_argument("--drop-ack", action="store_true", help="Apply commands but omit the application ACK")
     args = parser.parse_args()
     if not args.device_id.strip() or any(char in args.device_id for char in "/+#\0"):
@@ -53,6 +55,9 @@ def main():
     recent_acks = {}
 
     def publish_telemetry(client):
+        if args.random:
+            sample["humidity"] = round(uniform(0, 100), 2)
+            sample["temperature"] = round(uniform(20, 40), 2)
         client.publish(f"{base_topic}/telemetry", json.dumps(sample), qos=1)
 
     def fail(message):

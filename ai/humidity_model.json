@@ -1,0 +1,30 @@
+{
+  "version": "humidity-centroid-v1",
+  "window_size": 6,
+  "feature_names": [
+    "mean_change",
+    "mean_absolute_step"
+  ],
+  "scales": [
+    6.5736345969178505,
+    4.0676159069219535
+  ],
+  "centroids": {
+    "stable": [
+      0.13453125000000027,
+      0.7339843750000002
+    ],
+    "humidity_rising": [
+      7.355520833333333,
+      2.51790625
+    ],
+    "humidity_falling": [
+      -7.465494791666667,
+      2.504953125
+    ],
+    "humidity_fluctuating": [
+      0.2030989583333324,
+      8.805546875000001
+    ]
+  }
+}
