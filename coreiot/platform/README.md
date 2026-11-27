@@ -14,6 +14,8 @@ The `deviceId` in telemetry matches the agreed local MQTT topic ID and this Core
 
 ## Import the dashboard template
 
+For the physical demonstration, import the [expanded dashboard](smart-classroom-expanded.dashboard.json) for `classroom-01`. Import the [public monitoring dashboard](smart-classroom-public.dashboard.json) separately and bind it only to the approved public telemetry entity. The sections below describe the generic sandbox template.
+
 1. Open **Dashboards → Add dashboard → Import dashboard** and upload [smart-classroom.dashboard.json](smart-classroom.dashboard.json). The template contains built-in widget references and has been checked locally. Import and rendering still require a CoreIOT tenant check.
 2. Open the imported **Smart Classroom** dashboard in edit mode. Edit its `Classroom` entity alias, choose **Single entity → Device**, and select the intended test device. The template starts with an unresolved name filter so it can be reused in different tenants without an entity ID or a live RPC target. Save the alias and dashboard before leaving edit mode.
 3. Start the simulated gateway from the [Member C setup](../README.md). Confirm the widgets populate and verify that each button targets the alias you selected. Keep the dashboard private and assign it only to operators who should control that device.
@@ -28,10 +30,10 @@ Create a dashboard called `Smart Classroom`, add the `Classroom` single-device a
 | --- | --- |
 | Entities table, system monitoring | `deviceId`, `fwVersion`, `active` as a platform attribute, and last sample time derived from the `temperature` telemetry point's timestamp |
 | Entities table, environmental monitoring | `temperature` (°C), `humidity` (%), `light` (raw), `motion` (detected or clear), `distance` (cm) |
-| Entities table, actuator monitoring | `lamp` and `fan` (on or off), and `door` (open or closed) from the last reported telemetry |
+| Entities table, actuator monitoring | `lamp` (on or off), and `door` (open or closed) from the last reported telemetry |
 | Recent temperature samples | `temperature` as points in a 30-second rolling time window |
 | Time series line charts, environmental history | Individual series for `temperature` (°C), `humidity` (%), and `light` (raw) |
-| Time series table, actuator history | Timestamp and reported `lamp`, `fan`, and `door` for each stored sample |
+| Time series table, actuator history | Timestamp and reported `lamp` and `door` for each stored sample |
 
 CoreIOT's sample timestamp is the source `ts` when synchronized and gateway receipt time otherwise. To display **Last telemetry update (UTC)** in the system table, configure a `temperature` data key with a post-processing function that returns `new Date(time).toISOString()` for a valid sample. The export includes that formatting and the boolean labels. [Data key post-processing](https://thingsboard.io/docs/user-guide/advanced-data-key-configuration/#data-post-processing-function) · [Time series table](https://thingsboard.io/docs/reference/widgets/tables/timeseries-table/)
 
@@ -45,8 +47,6 @@ Under **Control widgets**, add an **RPC Button** per action below. Choose the `C
 | --- | --- | --- |
 | Lamp on | `setLamp` | `true` |
 | Lamp off | `setLamp` | `false` |
-| Fan on | `setFan` | `true` |
-| Fan off | `setFan` | `false` |
 | Door open | `setDoor` | `true` |
 | Door close | `setDoor` | `false` |
 

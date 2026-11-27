@@ -6,6 +6,7 @@ import math
 import os
 import sys
 from threading import Event
+from time import time_ns
 from uuid import uuid4
 
 import paho.mqtt.client as mqtt
@@ -58,7 +59,10 @@ def main():
             return
 
         command_sent = True
-        payload = {"id": command_id, "method": "setLamp", "value": requested_state, "source": "gateway"}
+        payload = {
+            "id": command_id, "method": "setLamp", "value": requested_state, "source": "gateway",
+            "expiresAt": time_ns() // 1_000_000 + 3500,
+        }
         publication = client.publish(f"{base_topic}/cmd", json.dumps(payload), qos=1)
         if publication.rc == mqtt.MQTT_ERR_SUCCESS:
             print(f"Sent setLamp {args.set_lamp} (id={command_id})", flush=True)
@@ -67,6 +71,8 @@ def main():
 
     def on_message(client, userdata, message):
         nonlocal command_succeeded
+        if message.retain:
+            return
         try:
             payload = json.loads(message.payload)
         except ValueError:

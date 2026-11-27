@@ -2,12 +2,13 @@
 
 An IoT-based classroom monitoring and automation system developed for the Internet of Things course at HCMUT (Semester 261). The system integrates YoloUNO (ESP32-S3), an AIoT Kit, a PC gateway, and CoreIOT.
 
-**Status:** CoreIOT configuration and local verification completed. Platform deployment, physical integration, and system validation are in progress.
+**Status:** The Yolo UNO firmware and PC gateway are integrated in the working tree. Synthetic MQTT tests exercise telemetry, manual RPC, ACK correlation and reconnect. Member C reported successful tenant sandbox telemetry, manual RPC and notification delivery. Physical commissioning, tenant automation recovery and native OTA installation still need acceptance. Gateway AI inference and evaluation are pending Member B's implementation.
 
-The current hardware configuration focuses on humidity monitoring and board LED control using Yolo UNO. Extended features depend on hardware availability.
+The Yolo UNO build enables DHT20 temperature and humidity, an analog light sensor, PIR, ultrasonic distance, a servo door, a 16x2 I2C LCD, a controllable LED and a separate RGB warning LED. Physical wiring and the LED pin mapping still need confirmation.
 
 Member C's implementation includes dashboard configurations, RuleChain automation, notifications, OTA delivery verification, and a Python integration simulator.
 
+- [System Integration and Demonstration Guide](docs/SYSTEM_INTEGRATION.md)
 - [CoreIOT Deployment Guide](coreiot/docs/PLATFORM_DEPLOYMENT.md)
 - [Demo Guide](coreiot/docs/DEMO.md)
 - [Verification Record](coreiot/docs/VERIFICATION.md)
@@ -33,8 +34,8 @@ Telemetry flows from the device to CoreIOT. Control requests flow in the opposit
 | ID | Planned feature | Owner |
 | --- | --- | --- |
 | F01 | Monitor temperature, humidity, light, motion and distance; display readings on LCD and dashboards | A, B, C |
-| F02 | Automate lighting based on light and motion; support manual control | A, B, C |
-| F03 | Automate fan control based on temperature; report actuator state | A, B, C |
+| F02 | Automate lighting from CoreIOT humidity or from calibrated light and motion in the separate local mode; support manual control | A, B, C |
+| F03 | Display environmental warnings on the independent RGB LED and rotate sensor readings on the LCD | A |
 | F04 | Control model door via servo and record proximity events | A, B |
 | F05 | Remote monitoring, RPC control, RuleChain automation and threshold notifications | C, B |
 | F06 | Gateway AI event classification and local monitoring/control | B |
@@ -66,7 +67,7 @@ Branch: `feature/firmware` | Directory: `firmware/` | Targets: T07, T14
 
 - [ ] Confirm hardware inventory, GPIO assignments, power requirements and wiring.
 - [ ] Implement DHT20, light, PIR and distance sensor acquisition; handle IR input and LCD output.
-- [ ] Implement RGB LED, mini fan and servo drivers, safe startup states and a common command handler.
+- [ ] Implement RGB LED and servo drivers, safe startup states and a common command handler.
 - [ ] Implement Wi-Fi/MQTT connection, telemetry publishing, command subscription, ACK and reconnect handling.
 - [ ] Develop a self-implemented device web server with live readings and actuator controls (T07).
 - [ ] Implement OTA client compatible with the CoreIOT update mechanism agreed with C; prepare versioned builds 1.0.0 and 1.1.0 and a recovery build (T14).
@@ -100,8 +101,8 @@ Branch: `feature/coreiot` | Directory: `coreiot/` | Targets: T11, T12, T13, T14
 
 - [ ] Configure CoreIOT devices, device profiles, templates and dashboard.
 - [ ] Display environmental readings, actuator states, firmware version and AI events.
-- [ ] Implement remote lamp, fan and door controls using RPC; distinguish pending, confirmed and failed commands (T11).
-- [ ] Configure RuleChain lighting and fan automation with agreed thresholds and manual override policy (T12).
+- [ ] Implement remote lamp and door controls using RPC; distinguish pending, confirmed and failed commands (T11).
+- [ ] Configure RuleChain humidity-based lighting automation with agreed thresholds and manual override policy (T12).
 - [ ] Configure threshold notifications and verify actual receipt (T13).
 - [ ] Verify OTA permissions and supported update mechanism with A; upload firmware packages, assign versions and monitor update status (T14).
 - [ ] Test cloud functionality with synthetic telemetry and simulated command responses before hardware integration.
@@ -122,11 +123,11 @@ All members must follow [shared/PROTOCOL.md](shared/PROTOCOL.md).
 | `classroom/{deviceId}/cmd` | Gateway → Device |
 | `classroom/{deviceId}/ack` | Device → Gateway |
 
-Telemetry fields: `deviceId`, `ts`, `temperature`, `humidity`, `light`, `motion`, `distance`, `lamp`, `fan`, `door`, `fwVersion`.
+Telemetry fields: `deviceId`, `ts`, `temperature`, `humidity`, `light`, `motion`, `distance`, `lamp`, `door`, `fwVersion`.
 
-Commands: `setLamp`, `setFan`, `setDoor` with a unique command ID and boolean value. ACKs must include the matching ID, execution result and reported state.
+Commands: `setLamp`, `setDoor` with a unique command ID and boolean value. ACKs must include the matching ID, execution result and reported state.
 
-CoreIOT RuleChain owns automatic lighting and fan decisions. Manual override suppresses automation until released. Agree on override fields, thresholds, sampling interval, event classes and CoreIOT RPC/OTA interfaces before implementation. Do not introduce competing automation rules.
+The CoreIOT humidity RuleChain owns LED automation in the default build. Ultrasonic door automation runs on the board. Manual override suppresses automation until released. Agree on override fields, thresholds, sampling interval, event classes and CoreIOT RPC/OTA interfaces before implementation. Do not introduce competing automation rules.
 
 ## 6. Repository Structure
 

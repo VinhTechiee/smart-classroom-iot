@@ -6,7 +6,7 @@ from unittest.mock import Mock, patch
 from uuid import UUID
 
 from coreiot.simulator.classroom import Simulator
-from coreiot.simulator.gateway import RpcBridge
+from shared.coreiot import RpcBridge
 from platform_smoke import SandboxAPI, verify_sandbox, wait_for_state
 
 
@@ -53,12 +53,12 @@ class PlatformSmokeTests(unittest.TestCase):
         now = time.time_ns() // 1_000_000
         api = Mock(spec=SandboxAPI)
         api.latest.side_effect = [
-            {"fan": {"ts": now - 1, "value": "true"}},
-            {"fan": {"ts": now + 60_000, "value": "true"}},
-            {"fan": {"ts": now + 1, "value": "true"}},
+            {"door": {"ts": now - 1, "value": "true"}},
+            {"door": {"ts": now + 60_000, "value": "true"}},
+            {"door": {"ts": now + 1, "value": "true"}},
         ]
         with patch("platform_smoke.time.sleep"):
-            self.assertEqual(wait_for_state(api, "fan", True, previous_ts=now - 2, ack_ts=now), now + 1)
+            self.assertEqual(wait_for_state(api, "door", True, previous_ts=now - 2, ack_ts=now), now + 1)
         self.assertEqual(api.latest.call_count, 3)
 
     def test_stale_ack_cannot_verify_a_new_command(self):
@@ -84,7 +84,7 @@ class PlatformSmokeTests(unittest.TestCase):
         now = time.time_ns() // 1_000_000
         sample = Simulator(RpcBridge(name, 3.5)).sample(now).body
         latest = {key: {"ts": now, "value": value} for key, value in sample["values"].items()}
-        latest["fan"]["value"] = "unknown"
+        latest["door"]["value"] = "unknown"
         api = Mock(spec=SandboxAPI)
         api.entity_id = UUID(int=1)
         api.request.return_value = {"name": name}

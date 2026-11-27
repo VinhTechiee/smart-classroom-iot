@@ -37,12 +37,14 @@ static void sensorTask(void* parameter) {
     (void)parameter;
 
     waitForStartup();
+    TickType_t nextSample = xTaskGetTickCount();
 
     while (true) {
 
         if (FirmwareOTA::isUpdating()) {
 
             vTaskDelay(pdMS_TO_TICKS(100));
+            nextSample = xTaskGetTickCount();
 
             continue;
         }
@@ -60,7 +62,7 @@ static void sensorTask(void* parameter) {
 
             Serial.printf(
                 "[Mock] T=%.1f H=%.1f Light=%d Motion=%d "
-                "D=%.1f L=%d F=%d Door=%d Events=%lu\n",
+                "D=%.1f L=%d Door=%d Events=%lu\n",
 
                 data.sensors.temperature,
                 data.sensors.humidity,
@@ -68,13 +70,13 @@ static void sensorTask(void* parameter) {
                 (int)data.sensors.motion,
                 data.sensors.distance,
                 (int)data.actuators.lamp,
-                (int)data.actuators.fan,
                 (int)data.actuators.door,
                 (unsigned long)data.sensors.nearDoorCount
             );
         }
 
-        vTaskDelay(
+        vTaskDelayUntil(
+            &nextSample,
             pdMS_TO_TICKS(SENSOR_INTERVAL_MS)
         );
     }
@@ -146,6 +148,7 @@ static void networkTask(void* parameter) {
                 Serial.print("WiFi connected, IP: ");
 
                 Serial.println(WiFi.localIP());
+                configTime(0, 0, NTP_HOST);
             }
 
             // Initialize Web Server once
@@ -164,6 +167,9 @@ static void networkTask(void* parameter) {
                 FirmwareOTA::begin();
             }
 
+#if defined(SMART_CLASSROOM_COREIOT_OTA)
+            FirmwareOTA::begin();
+#endif
             LocalWeb::update();
 
             FirmwareOTA::update();
@@ -225,6 +231,9 @@ static void mqttTask(void* parameter) {
 // ==================================================
 
 void setup() {
+#if defined(SMART_CLASSROOM_COREIOT_OTA)
+    loadLabNetworkSettings();
+#endif
 
     // Serial initialization
 

@@ -6,7 +6,6 @@
 
 enum class ControlTarget {
     Lamp,
-    Fan,
     Door
 };
 
@@ -31,15 +30,17 @@ namespace Automation {
     ControlResult applyManualCommand(
         ControlTarget target,
         bool state,
-        ControlSource source
+        ControlSource source,
+        uint64_t expiresAt = 0
     );
 
     bool setAutomatic(
         ControlTarget target,
-        bool enabled
+        bool enabled,
+        uint64_t expiresAt = 0
     );
 
     void handleIR(uint64_t code);
 
-    void waitForIdle();
+    bool prepareForUpdate();
 }

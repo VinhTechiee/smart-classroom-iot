@@ -1,0 +1,11 @@
+key,type,encoding,value
+classroom,namespace,,
+wifi_ssid,data,string,
+wifi_password,data,string,
+mqtt_host,data,string,
+mqtt_username,data,string,classroom-ota-board
+mqtt_password,data,string,
+coreiot_token,data,string,
+coreiot_ca,file,string,C:/path/to/tenant-root-ca.pem
+fw_sha256,data,string,
+fw_size,data,u32,0

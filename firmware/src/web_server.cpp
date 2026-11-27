@@ -185,27 +185,6 @@ static const char WEB_PAGE[] PROGMEM = R"HTML(
             onclick="setMode('lamp', false)">Manual</button>
     </div>
 
-    <!-- QUAT -->
-
-    <div class="card">
-        <h3>Quạt</h3>
-
-        <p>Trạng thái: <b id="fan">--</b></p>
-        <p>Chế độ: <b id="fanMode">--</b></p>
-
-        <button class="on"
-            onclick="control('fan', true)">Bật</button>
-
-        <button class="off"
-            onclick="control('fan', false)">Tắt</button>
-
-        <button class="auto"
-            onclick="setMode('fan', true)">Auto</button>
-
-        <button class="manual"
-            onclick="setMode('fan', false)">Manual</button>
-    </div>
-
     <!-- CUA -->
 
     <div class="card">
@@ -267,7 +246,6 @@ function updateButtons() {
 
     const devices = [
         ["lamp", "hasLamp", "lampAutoAvailable"],
-        ["fan", "hasFan", "fanAutoAvailable"],
         ["door", "hasDoor", "doorAutoAvailable"]
     ];
 
@@ -354,16 +332,6 @@ function updateButtons() {
             );
 
             setText(
-                "fan",
-                showState(
-                    data.fan,
-                    data.fanKnown,
-                    "BẬT",
-                    "TẮT"
-                )
-            );
-
-            setText(
                 "door",
                 showState(
                     data.door,
@@ -376,11 +344,6 @@ function updateButtons() {
             setText(
                 "lampMode",
                 data.lampAuto ? "AUTO" : "MANUAL"
-            );
-
-            setText(
-                "fanMode",
-                data.fanAuto ? "AUTO" : "MANUAL"
             );
 
             setText(
@@ -410,10 +373,6 @@ if (!data.hasLamp) {
     setText("lampMode", "--");
 }
 
-if (!data.hasFan) {
-    setText("fan", "Không lắp");
-    setText("fanMode", "--");
-}
 
 if (!data.hasDoor) {
     setText("door", "Không lắp");
@@ -429,8 +388,8 @@ updateButtons();
 
             const ids = [
                 "temperature", "humidity", "light",
-                "distance", "motion", "lamp", "fan",
-                "door", "lampMode", "fanMode", "doorMode"
+                "distance", "motion", "lamp",
+                "door", "lampMode", "doorMode"
             ];
 
             ids.forEach(id => setText(id, "--"));
@@ -691,19 +650,16 @@ static void handleStatus() {
     // Actuator states
 
     doc["lamp"] = data.actuators.lamp;
-    doc["fan"] = data.actuators.fan;
     doc["door"] = data.actuators.door;
 
     // Known states
 
     doc["lampKnown"] = data.actuators.lampKnown;
-    doc["fanKnown"] = data.actuators.fanKnown;
     doc["doorKnown"] = data.actuators.doorKnown;
 
     // Auto / Manual
 
     doc["lampAuto"] = data.actuators.lampAuto;
-    doc["fanAuto"] = data.actuators.fanAuto;
     doc["doorAuto"] = data.actuators.doorAuto;
     // Hardware availability
 
@@ -713,14 +669,11 @@ doc["hasPIR"] = HAS_PIR;
 doc["hasUltrasonic"] = HAS_ULTRASONIC;
 
 doc["hasLamp"] = HAS_EXTERNAL_LAMP || HAS_ONBOARD_LED;
-doc["hasFan"] = HAS_FAN;
 doc["hasDoor"] = HAS_SERVO;
 
 doc["lampAutoAvailable"] =
-    (HAS_EXTERNAL_LAMP || HAS_ONBOARD_LED) &&
-    HAS_PIR && HAS_LIGHT_SENSOR;
+    LAMP_LOCAL_AVAILABLE;
 
-doc["fanAutoAvailable"] = HAS_FAN && HAS_DHT20;
 
 doc["doorAutoAvailable"] = HAS_SERVO && HAS_ULTRASONIC;
     // System information
@@ -743,12 +696,6 @@ static bool parseTarget(
     if (name == "lamp") {
 
         target = ControlTarget::Lamp;
-
-        return true;
-    }
-    else if (name == "fan") {
-
-        target = ControlTarget::Fan;
 
         return true;
     }

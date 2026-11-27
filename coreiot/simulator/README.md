@@ -18,7 +18,7 @@ Expected startup events are `mqtt_connecting`, `mqtt_connected`, `rpc_subscripti
 
 Run one example at a time. For the ordered 65, 85, 77 and 70% RH sequence, use the [deployment scenario commands](../docs/PLATFORM_DEPLOYMENT.md#10-run-the-synthetic-scenarios). Carry the last verified LED state into each restart with `--lamp`, since the simulator initializes its actuator state at process startup. Firmware versions `1.0.0` and `1.1.0` exercise the version display with synthetic data.
 
-`--minimal` publishes humidity, `lamp`, `fwVersion` and device identity. Pass `--temperature` to include a temperature sample. `--omit-humidity` simulates a failed sensor reading, and `--no-led` omits `lamp` and rejects LED RPC. In this mode `setFan` and `setDoor` are unsupported. The examples after the blank line exercise the extended profile.
+`--minimal` publishes humidity, `lamp`, `fwVersion` and device identity. Pass `--temperature` to include a temperature sample. `--omit-humidity` simulates a failed sensor reading, and `--no-led` omits `lamp` and rejects LED RPC. In this mode `setDoor` is unsupported. The examples after the blank line exercise the extended profile.
 
 ```powershell
 & .venv/coreiot/Scripts/python.exe -m coreiot.simulator --minimal --env-file coreiot/.env --humidity 80 --lamp false
@@ -26,13 +26,13 @@ Run one example at a time. For the ordered 65, 85, 77 and 70% RH sequence, use t
 & .venv/coreiot/Scripts/python.exe -m coreiot.simulator --minimal --env-file coreiot/.env --omit-humidity --no-led
 
 & .venv/coreiot/Scripts/python.exe -m coreiot.simulator --env-file coreiot/.env --temperature 35 --light 100 --motion true --fw-version 1.0.0
-& .venv/coreiot/Scripts/python.exe -m coreiot.simulator --env-file coreiot/.env --temperature 27 --light 400 --motion false --lamp true --fan true --fw-version 1.1.0
+& .venv/coreiot/Scripts/python.exe -m coreiot.simulator --env-file coreiot/.env --temperature 27 --light 400 --motion false --lamp true --fw-version 1.1.0
 & .venv/coreiot/Scripts/python.exe -m coreiot.simulator --env-file coreiot/.env --unsynchronized --interval-ms 1000
 ```
 
 | Scenario | Settings or request | Expected result |
 | --- | --- | --- |
-| Lamp, fan, door | Send `setLamp`, `setFan`, and `setDoor` with JSON `true` or `false` | `simulated_command`, `rpc_response_queued` with `ok:true` and matching `actualState`, and `telemetry_queued` with the changed state |
+| Lamp and door | Send `setLamp` and `setDoor` with JSON `true` or `false` | `simulated_command`, `rpc_response_queued` with `ok:true` and matching `actualState`, and `telemetry_queued` with the changed state |
 | Unsupported method or invalid value | Send `setWindow` or use `1` for `params` | `ok:false` with `unsupported_method` or `invalid_value` and the simulator leaves the existing state in place |
 | Unknown target | `--missing-device` | `ok:false`, `error:"unknown_device"` |
 | Device unreachable | `--offline-device --timeout-ms 1000` | `ok:false`, `error:"device_timeout"` and no fresh telemetry |

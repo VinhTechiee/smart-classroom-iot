@@ -11,7 +11,7 @@ from threading import Event, Thread
 from time import monotonic
 
 from coreiot.simulator.classroom import Simulator
-from coreiot.simulator.gateway import RPC_REQUEST_PREFIX, RPC_RESPONSE_PREFIX, TELEMETRY_TOPIC, RpcBridge
+from shared.coreiot import RPC_REQUEST_PREFIX, RPC_RESPONSE_PREFIX, TELEMETRY_TOPIC, RpcBridge
 
 try:
     from coreiot.simulator.mqtt_client import MqttSettings, run
@@ -163,31 +163,31 @@ class MqttLoopbackTests(unittest.TestCase):
 
                     self.command(first, "retained", 9, "setLamp", True, retained=True)
                     self.assertEqual(read_packet(first), (0x40, b"\x00\x09"))
-                    self.command(first, "42", 10, "setFan", True)
+                    self.command(first, "42", 10, "setDoor", True)
                     messages, pubacks = self.publications(first, 2)
                     self.assertEqual(pubacks, {10: 1})
                     self.assertEqual([topic for topic, _ in messages], [RPC_RESPONSE_PREFIX + "42", TELEMETRY_TOPIC])
                     first_ack = messages[0][1]
                     self.assertTrue(first_ack["ok"] and first_ack["actualState"])
-                    self.assertTrue(messages[1][1]["values"]["fan"])
+                    self.assertTrue(messages[1][1]["values"]["door"])
                     self.assertIs(messages[1][1]["values"]["lamp"], False)
                     self.assertEqual(first_ack["ts"], messages[1][1]["ts"])
 
-                    self.command(first, "42", 10, "setFan", True, duplicate=True)
+                    self.command(first, "42", 10, "setDoor", True, duplicate=True)
                     self.command(first, "43", 11, "setDoor", 1)
                     replies, _ = self.publications(first, 2)
                     self.assertEqual(replies[0], (RPC_RESPONSE_PREFIX + "42", first_ack))
                     self.assertEqual(replies[1][0], RPC_RESPONSE_PREFIX + "43")
                     self.assertEqual(replies[1][1]["error"], "invalid_value")
-                    self.assertIs(simulator.sample(0).body["values"]["door"], False)
+                    self.assertIs(simulator.sample(0).body["values"]["door"], True)
 
                 second, _ = broker.accept()
                 with second:
                     self.assertNotEqual(self.connect_peer(second), first_id)
                     resumed, _ = self.publications(second, 1)
                     self.assertEqual(resumed[0][0], TELEMETRY_TOPIC)
-                    self.assertTrue(resumed[0][1]["values"]["fan"])
-                    self.command(second, "42", 12, "setFan", False)
+                    self.assertTrue(resumed[0][1]["values"]["door"])
+                    self.command(second, "42", 12, "setDoor", False)
                     deferred = []
                     messages, _ = self.publications(second, 2, defer_pubacks=deferred)
                     next_ack = messages[0][1]
@@ -195,7 +195,7 @@ class MqttLoopbackTests(unittest.TestCase):
                     self.assertNotEqual(next_ack["id"], first_ack["id"])
                     self.assertTrue(next_ack["ok"])
                     self.assertFalse(next_ack["actualState"])
-                    self.assertFalse(messages[1][1]["values"]["fan"])
+                    self.assertFalse(messages[1][1]["values"]["door"])
                     stop.set()
                     self.command(second, "44", 13, "setLamp", True)
                     self.assertEqual(read_packet(second), (0x40, b"\x00\x0d"))
@@ -246,14 +246,14 @@ class MqttLoopbackTests(unittest.TestCase):
                 peer, _ = broker.accept()
                 with peer:
                     _, subscription_id = self.read_subscription(peer)
-                    self.command(peer, "42", 10, "setFan", True)
+                    self.command(peer, "42", 10, "setDoor", True)
                     self.assertEqual(read_packet(peer), (0x40, b"\x00\x0a"))
-                    self.assertFalse(simulator.sample(0).body["values"]["fan"])
+                    self.assertFalse(simulator.sample(0).body["values"]["door"])
                     send_packet(peer, 0x90, subscription_id + b"\x01")
                     messages, _ = self.publications(peer, 2)
                     self.assertEqual([topic for topic, _ in messages], [RPC_RESPONSE_PREFIX + "42", TELEMETRY_TOPIC])
                     self.assertTrue(messages[0][1]["actualState"])
-                    self.assertTrue(messages[1][1]["values"]["fan"])
+                    self.assertTrue(messages[1][1]["values"]["door"])
             finally:
                 stop.set()
                 client.join(6)

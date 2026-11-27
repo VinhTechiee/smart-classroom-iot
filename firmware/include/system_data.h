@@ -24,15 +24,12 @@ struct SensorData {
 
 struct ActuatorData {
     bool lamp = false;
-    bool fan = false;
     bool door = false;
 
     bool lampKnown = false;
-    bool fanKnown = false;
     bool doorKnown = false;
 
-    bool lampAuto = true;
-    bool fanAuto = true;
+    bool lampAuto = false;
     bool doorAuto = false;
 };
 

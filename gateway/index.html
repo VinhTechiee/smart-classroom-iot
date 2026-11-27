@@ -107,6 +107,18 @@
           <h2>Nhiệt độ</h2>
           <p class="value"><output id="temperature">—</output><span>°C</span></p>
         </div>
+        <div class="measure">
+          <h2>Ánh sáng</h2>
+          <p class="value"><output id="light">—</output><span>ADC</span></p>
+        </div>
+        <div class="measure">
+          <h2>Chuyển động</h2>
+          <p><output id="motion">—</output></p>
+        </div>
+        <div class="measure">
+          <h2>Khoảng cách</h2>
+          <p class="value"><output id="distance">—</output><span>cm</span></p>
+        </div>
       </section>
 
       <section class="panel" aria-labelledby="led-heading">
@@ -116,10 +128,20 @@
           <button id="turn-on" type="button" disabled>Bật LED</button>
           <button id="turn-off" class="secondary" type="button" disabled>Tắt LED</button>
         </div>
-        <p id="command-status" role="status"></p>
+      </section>
+      <section class="panel" aria-labelledby="door-heading">
+        <h2 id="door-heading">Cửa</h2>
+        <p><output id="door">—</output> · <output id="door-mode">—</output></p>
+        <div class="controls">
+          <button id="door-open" type="button" disabled>Mở cửa</button>
+          <button id="door-close" class="secondary" type="button" disabled>Đóng cửa</button>
+          <button id="door-auto" class="secondary" type="button" disabled>Tự động</button>
+          <button id="door-manual" class="secondary" type="button" disabled>Thủ công</button>
+        </div>
       </section>
     </div>
 
+    <p id="command-status" role="status"></p>
     <p class="last-report">Lần nhận dữ liệu gần nhất <time id="received-at">—</time></p>
   </main>
 
@@ -127,20 +149,33 @@
     const humidity = document.querySelector("#humidity");
     const temperature = document.querySelector("#temperature");
     const lamp = document.querySelector("#lamp");
+    const light = document.querySelector("#light");
+    const motion = document.querySelector("#motion");
+    const distance = document.querySelector("#distance");
+    const door = document.querySelector("#door");
+    const doorMode = document.querySelector("#door-mode");
     const device = document.querySelector("#device");
     const connection = document.querySelector("#connection");
     const receivedAt = document.querySelector("#received-at");
     const commandStatus = document.querySelector("#command-status");
     const turnOn = document.querySelector("#turn-on");
     const turnOff = document.querySelector("#turn-off");
+    const doorOpen = document.querySelector("#door-open");
+    const doorClose = document.querySelector("#door-close");
+    const doorAuto = document.querySelector("#door-auto");
+    const doorManual = document.querySelector("#door-manual");
     const STALE_AFTER_MS = 30_000;
     let commandPending = false;
     let canControl = false;
+    let canControlDoor = false;
+    let canControlMode = false;
     let polling = false;
 
     function updateButtons() {
       turnOn.disabled = commandPending || !canControl;
       turnOff.disabled = turnOn.disabled;
+      doorOpen.disabled = doorClose.disabled = commandPending || !canControlDoor;
+      doorAuto.disabled = doorManual.disabled = commandPending || !canControlMode;
     }
 
     function displayReading(value) {
@@ -158,9 +193,14 @@
         const hasReport = Number.isFinite(data.receivedAt);
         const fresh = hasReport && Date.now() - data.receivedAt <= STALE_AFTER_MS;
         const hasLamp = typeof data.lamp === "boolean";
-        device.textContent = data.deviceId;
+        device.textContent = data.fwVersion ? `${data.deviceId} · Firmware ${data.fwVersion}` : data.deviceId;
         humidity.textContent = displayReading(data.humidity);
         temperature.textContent = displayReading(data.temperature);
+        light.textContent = displayReading(data.light);
+        distance.textContent = displayReading(data.distance);
+        motion.textContent = data.motion == null ? "—" : data.motion ? "Có" : "Không";
+        door.textContent = data.door == null ? "—" : data.door ? "Mở" : "Đóng";
+        doorMode.textContent = data.doorAuto == null ? "—" : data.doorAuto ? "Tự động" : "Thủ công";
         lamp.textContent = hasLamp ? (data.lamp ? "Đang bật" : "Đang tắt") : "Chưa có trạng thái";
         lamp.dataset.on = data.lamp === true;
 
@@ -168,6 +208,9 @@
           const date = new Date(data.receivedAt);
           receivedAt.dateTime = date.toISOString();
           receivedAt.textContent = date.toLocaleTimeString("vi-VN");
+        } else {
+          receivedAt.removeAttribute("datetime");
+          receivedAt.textContent = "—";
         }
 
         if (!data.brokerConnected) {
@@ -179,23 +222,26 @@
         }
         connection.dataset.live = data.brokerConnected && fresh;
         canControl = data.brokerConnected && fresh && hasLamp;
+        canControlDoor = data.brokerConnected && fresh && typeof data.door === "boolean";
+        canControlMode = canControlDoor && typeof data.doorAuto === "boolean";
       } catch {
         connection.textContent = "Không kết nối được gateway";
         connection.dataset.live = false;
         canControl = false;
+        canControlDoor = canControlMode = false;
       } finally {
         polling = false;
         updateButtons();
       }
     }
 
-    async function setLamp(value) {
+    async function sendControl(path, value) {
       commandPending = true;
       commandStatus.dataset.error = false;
       commandStatus.textContent = "Đang chờ thiết bị xác nhận…";
       updateButtons();
       try {
-        const response = await fetch("/led", {
+        const response = await fetch(path, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ value }),
@@ -207,7 +253,7 @@
           commandStatus.dataset.error = true;
           commandStatus.textContent = ack.error === "device_timeout"
             ? "Hết thời gian chờ xác nhận từ thiết bị."
-            : "Không xác nhận được lệnh LED.";
+            : "Không xác nhận được lệnh.";
         }
         await pollSensors();
       } catch {
@@ -219,8 +265,12 @@
       }
     }
 
-    turnOn.addEventListener("click", () => setLamp(true));
-    turnOff.addEventListener("click", () => setLamp(false));
+    turnOn.addEventListener("click", () => sendControl("/led", true));
+    turnOff.addEventListener("click", () => sendControl("/led", false));
+    doorOpen.addEventListener("click", () => sendControl("/door", true));
+    doorClose.addEventListener("click", () => sendControl("/door", false));
+    doorAuto.addEventListener("click", () => sendControl("/door-auto", true));
+    doorManual.addEventListener("click", () => sendControl("/door-auto", false));
     pollSensors();
     setInterval(pollSensors, 3000);
   </script>

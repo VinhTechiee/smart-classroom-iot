@@ -33,14 +33,13 @@ For the current kit, forward `deviceId`, `fwVersion`, measured `humidity`, measu
     "motion": true,
     "distance": 42,
     "lamp": false,
-    "fan": false,
     "door": false,
     "fwVersion": "1.0.0"
   }
 }
 ```
 
-Temperature is in °C, humidity is percent, light is raw, and distance is in cm. A true `lamp` or `fan` means on, and a true `door` means open. These are reported firmware states. The dashboard displays them from telemetry. `fwVersion` is the firmware version reported by YoloUNO.
+Temperature is in °C, humidity is percent, light is raw, and distance is in cm. A true `lamp` means on, and a true `door` means open. These are reported firmware states. The dashboard displays them from telemetry. `fwVersion` is the firmware version reported by YoloUNO.
 
 ### RPC and acknowledgements
 
@@ -49,23 +48,22 @@ The gateway copies the CoreIOT RPC `method` into the local MQTT `method` and the
 | CoreIOT and local `method` | `params` → `value` | Device ACK `actualState` when applied | Telemetry key |
 | --- | --- | --- | --- |
 | `setLamp` | `true` on, `false` off | `true` on, `false` off | `lamp` |
-| `setFan` | `true` on, `false` off | `true` on, `false` off | `fan` |
 | `setDoor` | `true` open, `false` closed | `true` open, `false` closed | `door` |
 
 Allocate a unique local command ID for each new request. Keep the pending mapping from the classroom, active cloud session and cloud request ID to the local command and deadline. Match an incoming ACK using the classroom ID in the local ACK topic and the command `id` in its payload. Return the ACK body on the CoreIOT response topic with the original cloud request ID. Only commands with a live CoreIOT mapping produce a cloud RPC response. Local actions still reach CoreIOT through ordinary telemetry.
 
-For example, switching off the fan in `classroom-01` can produce this exchange.
+For example, closing the door in `classroom-01` can produce this exchange.
 
 | Step | MQTT topic | Example payload |
 | --- | --- | --- |
-| CoreIOT sends RPC | `v1/devices/me/rpc/request/42` | `{"method":"setFan","params":false}` |
-| Gateway sends local command | `classroom/classroom-01/cmd` | `{"id":"cmd-001","method":"setFan","value":false,"source":"coreiot"}` |
+| CoreIOT sends RPC | `v1/devices/me/rpc/request/42` | `{"method":"setDoor","params":false}` |
+| Gateway sends local command | `classroom/classroom-01/cmd` | `{"id":"cmd-001","method":"setDoor","value":false,"source":"coreiot","expiresAt":1760000003500}` |
 | Device acknowledges | `classroom/classroom-01/ack` | `{"id":"cmd-001","ok":true,"actualState":false,"ts":null}` |
 | Gateway completes RPC | `v1/devices/me/rpc/response/42` | `{"id":"cmd-001","ok":true,"actualState":false,"ts":null}` |
-| Device reports fresh state | `classroom/classroom-01/telemetry` | Full shared telemetry with `"fan":false` |
-| Gateway forwards reported state | `v1/devices/me/telemetry` | Full timestamped envelope with `"fan":false` in `values` |
+| Device reports fresh state | `classroom/classroom-01/telemetry` | Full shared telemetry with `"door":false` |
+| Gateway forwards reported state | `v1/devices/me/telemetry` | Full timestamped envelope with `"door":false` in `values` |
 
-The ACK confirms the application result for one command. Check that `ok` is `true` and `actualState` matches the requested boolean. The dashboard reads `lamp`, `fan`, and `door` from the latest reported telemetry, including updates from local control.
+The ACK confirms the application result for one command. Check that `ok` is `true` and `actualState` matches the requested boolean. The dashboard reads `lamp` and `door` from the latest reported telemetry, including updates from local control.
 
 Reject unsupported methods or values other than JSON booleans before publishing a local command. Forward device failures with `ok:false`, an `error`, and `actualState:null` when the state is unknown. Set the gateway ACK deadline below the CoreIOT RPC timeout so the gateway can report a missing ACK with `ok:false`, an `error`, and `actualState:null` while the cloud request is still open. Deduplicate by CoreIOT request ID within the active classroom session and reuse the existing result or pending mapping. The MQTT `DUP` flag can appear on the first receipt. Ignore unmatched, expired, or duplicate completed ACKs when routing cloud responses, remove timed-out mappings, and avoid replaying stale commands after reconnecting.
 
@@ -86,7 +84,7 @@ Follow the [platform deployment sequence](docs/PLATFORM_DEPLOYMENT.md) for the c
 | --- | --- | --- |
 | T11 monitoring | Start the simulator and confirm all measurement and actuator keys, identity and firmware version on the expected entity. Compare a sample's platform timestamp with the source timestamp and repeat with a null device timestamp. | Latest telemetry, chart screenshot, and source and receive timestamps. |
 | T11 control | With automation disabled, send both boolean values for each of the three methods. Check the ACK ID, success and matching `actualState`. Check fresh telemetry after each success. Try an unsupported method or numeric value in the sandbox and confirm failure with state unchanged. Stop the simulator, issue a request and record the timeout. Restart and confirm telemetry and new requests resume. | RPC/ACK logs, dashboard states, negative cases and reconnect trace. |
-| T12 automation | With simulator telemetry, leave the enable flag absent or false and verify no automatic RPC. In the sandbox only, enable the chain and test lamp and fan thresholds in both directions, readings in the hysteresis band and an explicit manual override. On hardware, repeat after approval and test a manual action while an automatic request is in flight. | RuleChain inputs and traces, RPC results, reported state, and the result of each override test. |
+| T12 automation | With simulator telemetry, leave the enable flag absent or false and verify no automatic RPC. In the sandbox only, enable the chain and test the humidity thresholds in both directions, readings in the hysteresis band and an explicit manual override. On hardware, repeat after approval and test a manual action while an automatic request is in flight. | RuleChain inputs and traces, RPC results, reported state, and the result of each override test. |
 | T13 alerts | Send readings below the create threshold, at or above it, between create and clear, and at or below clear. Repeat the high reading while active. Confirm the alarm opens once, stays active in the band, and clears. Check the configured recipient actually receives the test alert. | Alarm lifecycle, notification delivery time, and recipient confirmation with personal data removed. |
 | T14 OTA | Verify package assignment and checksum on a virtual lab-profile device first. On the designated lab unit, record the starting version, assign the reviewed package, verify download and update statuses, then check `fwVersion` after reboot and repeat the telemetry and RPC checks. | Package title, version and checksum, status transitions, post-boot `fwVersion`, and recovery result if exercised. |
 

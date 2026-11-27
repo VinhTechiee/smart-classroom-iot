@@ -11,10 +11,10 @@ from urllib.request import Request, urlopen
 from uuid import UUID
 
 
-ACTUATORS = {"setLamp": "lamp", "setFan": "fan", "setDoor": "door"}
+ACTUATORS = {"setLamp": "lamp", "setDoor": "door"}
 LIVE_KEYS = (
     "deviceId", "ts", "temperature", "humidity", "light", "motion", "distance",
-    "lamp", "fan", "door", "fwVersion",
+    "lamp", "door", "fwVersion",
 )
 MINIMAL_KEYS = ("deviceId", "ts", "humidity", "lamp", "fwVersion")
 MAX_SAMPLE_AGE_MS = 30_000
@@ -139,7 +139,7 @@ def verify_sandbox(
             print(json.dumps({"mode": "synthetic", "method": method, "value": desired,
                               "ackId": ack_id, "ackTs": ack_ts, "rpcMs": elapsed, "telemetryTs": previous_ts}))
 
-    known_method = "setLamp" if minimal else "setFan"
+    known_method = "setLamp" if minimal else "setDoor"
     for method, value, error in (("unsupportedMethod", True, "unsupported_method"), (known_method, 1, "invalid_value")):
         ack = api.rpc(method, value)
         if ack.get("ok") is not False or ack.get("actualState", False) is not None or ack.get("error") != error:

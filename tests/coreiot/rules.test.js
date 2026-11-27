@@ -15,7 +15,7 @@ const enabled = {
     ss_classroomManualOverride: "false",
     ss_classroomRuleSettings: JSON.stringify(settings)
 };
-const hotAndDark = {temperature: 31, light: 249, motion: true, lamp: false, fan: false, door: false};
+const hotAndDark = {temperature: 31, light: 249, motion: true, lamp: false, door: false};
 
 function readNode(filename) {
     const script = fs.readFileSync(path.join(__dirname, "../../coreiot/rules", filename), "utf8");
@@ -71,10 +71,9 @@ test("automation excludes missing, stale, implausibly future, and non-telemetry 
 test("fresh out-of-band readings make two-way boolean requests to the telemetry originator", () => {
     const requests = commands(hotAndDark, enabled);
     assert.deepEqual(payloads(hotAndDark), [
-        {method: "setLamp", params: true},
-        {method: "setFan", params: true}
+        {method: "setLamp", params: true}
     ]);
-    assert.equal(requests.length, 2);
+    assert.equal(requests.length, 1);
     for (const request of requests) {
         assert.equal(request.msgType, telemetryType);
         assert.deepEqual({...request.metadata}, {
@@ -83,9 +82,8 @@ test("fresh out-of-band readings make two-way boolean requests to the telemetry 
             persistent: "false"
         });
     }
-    assert.deepEqual(payloads({temperature: 27, light: 350, motion: true, lamp: true, fan: true}), [
-        {method: "setLamp", params: false},
-        {method: "setFan", params: false}
+    assert.deepEqual(payloads({temperature: 27, light: 350, motion: true, lamp: true}), [
+        {method: "setLamp", params: false}
     ]);
 });
 
@@ -98,24 +96,25 @@ test("freshness gate suppresses superseded arrivals before alerts and automation
     assert.deepEqual(payloads(hotAndDark, {...enabled, temperature: "31"}), []);
     assert.equal(payloads(hotAndDark, {
         ...enabled, ts: String(earlier), temperature: JSON.stringify({ts: earlier, value: 31})
-    }).length, 2);
+    }).length, 1);
 });
 
 test("hysteresis and already-reported state suppress repeat requests", () => {
-    assert.deepEqual(payloads({...hotAndDark, lamp: true, fan: true}), []);
+    assert.deepEqual(payloads({...hotAndDark, lamp: true}), []);
     for (const actual of [true, false]) {
-        assert.deepEqual(payloads({temperature: 29, light: 300, motion: true, lamp: actual, fan: actual}), []);
+        assert.deepEqual(payloads({temperature: 29, light: 300, motion: true, lamp: actual}), []);
     }
 });
 
 test("invalid inputs are suppressed for the affected actuator", () => {
     assert.deepEqual(payloads({...hotAndDark, temperature: "30"}), [{method: "setLamp", params: true}]);
-    assert.deepEqual(payloads({...hotAndDark, lamp: 0}), [{method: "setFan", params: true}]);
-    assert.deepEqual(payloads({...hotAndDark, light: NaN, fan: null}), []);
+    assert.deepEqual(payloads({...hotAndDark, lamp: 0}), []);
+    assert.deepEqual(payloads({...hotAndDark, light: NaN}), []);
     for (const motion of [undefined, null, "true", 1]) {
-        assert.deepEqual(payloads({...hotAndDark, motion}), [{method: "setFan", params: true}]);
+        assert.deepEqual(payloads({...hotAndDark, motion}), []);
     }
     assert.equal(isRequest({method: "setDoor", params: false}), false);
+    assert.equal(isRequest({method: "setFan", params: true}), false);
     assert.equal(isRequest({method: "setLamp", params: "false"}), false);
 });
 
@@ -132,25 +131,13 @@ test("lamp requires motion and low light to turn on and turns off for inactivity
     }
 });
 
-test("fan operates beyond configurable, ordered thresholds", () => {
-    const custom = {...enabled, ss_classroomRuleSettings: JSON.stringify({fanOnAbove: 25, fanOffBelow: 23})};
-    for (const [temperature, fan, expected] of [
-        [25.1, false, [{method: "setFan", params: true}]],
-        [25, false, []],
-        [23, true, []],
-        [22.9, true, [{method: "setFan", params: false}]]
-    ]) {
-        assert.deepEqual(payloads({temperature, fan}, custom), expected);
-    }
-});
-
 test("missing, malformed, or inverted threshold settings cannot actuate", () => {
     for (const ss_classroomRuleSettings of [undefined, "{", "null", "[]", "{}", "2", "true"]) {
         assert.deepEqual(payloads(hotAndDark, {...enabled, ss_classroomRuleSettings}), []);
     }
     assert.deepEqual(payloads(hotAndDark, {
         ...enabled,
-        ss_classroomRuleSettings: JSON.stringify({...settings, lampOnBelow: 400, fanOnAbove: "30"})
+        ss_classroomRuleSettings: JSON.stringify({...settings, lampOnBelow: 400})
     }), []);
 });
 

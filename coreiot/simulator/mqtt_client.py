@@ -13,7 +13,7 @@ from uuid import uuid4
 import paho.mqtt.client as mqtt
 
 from .classroom import Simulator, log_event
-from .gateway import RPC_REQUEST_PREFIX, RPC_RESPONSE_PREFIX, Publication
+from shared.coreiot import RPC_REQUEST_PREFIX, RPC_RESPONSE_PREFIX, Publication
 
 
 @dataclass(frozen=True)

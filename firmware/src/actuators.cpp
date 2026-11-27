@@ -67,16 +67,7 @@ bool Actuators::begin() {
     // Onboard LED
     if (HAS_ONBOARD_LED) {
         pinMode(LED_PIN, OUTPUT);
-        digitalWrite(LED_PIN, LOW);
-    }
-
-    // Fan
-    if (HAS_FAN) {
-        pinMode(FAN_PIN, OUTPUT);
-        digitalWrite(FAN_PIN, LOW);
-
-        pinMode(FAN_AUX_PIN, OUTPUT);
-        digitalWrite(FAN_AUX_PIN, LOW);
+        digitalWrite(LED_PIN, LED_ACTIVE_HIGH ? LOW : HIGH);
     }
 
     // Servo
@@ -157,34 +148,13 @@ bool Actuators::setLamp(bool state) {
     if (HAS_ONBOARD_LED) {
         digitalWrite(
             LED_PIN,
-            state ? HIGH : LOW
+            state == LED_ACTIVE_HIGH ? HIGH : LOW
         );
     }
 
     return true;
 }
 
-
-// 3. Control fan
-
-bool Actuators::setFan(bool state) {
-    if (!HAS_FAN) {
-        return false;
-    }
-    if (MOCK_MODE == true) {
-        return true;
-    }
-    else {
-        if (state == true) {
-            digitalWrite(FAN_PIN, HIGH);
-        }
-        else {
-            digitalWrite(FAN_PIN, LOW);
-        }
-
-        return true;
-    }
-}
 
 // 4. Control door
 
@@ -221,54 +191,56 @@ void Actuators::updateLCD(const ClassroomData& data) {
         return;
     }
 
-    char line1[LCD_COLS + 1];
-    char line2[LCD_COLS + 1];
+    static unsigned long lastPageMs = 0;
+    static bool displayed = false;
+    static uint8_t page = 0;
+    const unsigned long now = millis();
+    if (displayed && now - lastPageMs < LCD_INTERVAL_MS) return;
+    displayed = true;
+    lastPageMs = now;
 
-    if (data.sensors.dhtValid == true) {
-        snprintf(
-            line1,
-            sizeof(line1),
-            "T:%.1fC H:%.0f%%",
-            data.sensors.temperature,
-            data.sensors.humidity
-        );
+    char first[LCD_COLS + 1]{};
+    char second[LCD_COLS + 1]{};
+    const bool fresh = now - data.sensors.sampledAtMs <= SENSOR_STALE_MS;
+    const auto& sensors = data.sensors;
+    switch (page) {
+        case 0:
+            if (fresh && sensors.dhtValid) {
+                snprintf(first, sizeof(first), "Temp: %.1f C", sensors.temperature);
+                snprintf(second, sizeof(second), "RH: %.1f %%", sensors.humidity);
+            } else {
+                snprintf(first, sizeof(first), "Temp: N/A");
+                snprintf(second, sizeof(second), "RH: N/A");
+            }
+            break;
+        case 1:
+            if (fresh && sensors.lightValid) {
+                snprintf(first, sizeof(first), "Light: %d", sensors.light);
+            } else {
+                snprintf(first, sizeof(first), "Light: N/A");
+            }
+            snprintf(second, sizeof(second), "Motion: %s",
+                !fresh || !sensors.motionValid ? "N/A" : sensors.motion ? "YES" : "NO");
+            break;
+        case 2:
+            if (fresh && sensors.distanceValid) {
+                snprintf(first, sizeof(first), "Dist: %.1f cm", sensors.distance);
+            } else {
+                snprintf(first, sizeof(first), "Distance: N/A");
+            }
+            snprintf(second, sizeof(second), "Door: %s", !data.actuators.doorKnown ? "N/A" :
+                data.actuators.door ? "OPEN" : "CLOSED");
+            break;
     }
-    else {
-        snprintf(
-            line1,
-            sizeof(line1),
-            "DHT20 ERROR"
-        );
+    const char* rows[] = {first, second};
+    for (int row = 0; row < LCD_ROWS; ++row) {
+        lcd.setCursor(0, row);
+        const size_t length = strlen(rows[row]);
+        for (size_t col = 0; col < LCD_COLS; ++col) {
+            lcd.write(col < length ? rows[row][col] : ' ');
+        }
     }
-
-    auto stateChar = [](bool known, bool state) {
-        return known ? (state ? '1' : '0') : '?';
-    };
-
-    snprintf(
-        line2,
-        sizeof(line2),
-        "L:%c F:%c D:%c",
-        stateChar(data.actuators.lampKnown, data.actuators.lamp),
-        stateChar(data.actuators.fanKnown, data.actuators.fan),
-        stateChar(data.actuators.doorKnown, data.actuators.door)
-    );
-
-    lcd.setCursor(0, 0);
-
-    for (int i = 0; i < LCD_COLS; ++i) {
-        lcd.write(
-            i < (int)strlen(line1) ? line1[i] : ' '
-        );
-    }
-
-    lcd.setCursor(0, 1);
-
-    for (int i = 0; i < LCD_COLS; ++i) {
-        lcd.write(
-            i < (int)strlen(line2) ? line2[i] : ' '
-        );
-    }
+    page = (page + 1) % 3;
 }
 
 

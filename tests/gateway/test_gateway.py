@@ -75,16 +75,19 @@ class GatewayLoopbackTests(unittest.TestCase):
         send_packet(connection, 0x40, remaining[:2])
         return topic.decode(), json.loads(remaining[2:])
 
-    def start_gateway(self):
+    def start_gateway(self, device=DEVICE):
         local = self.broker()
+        self.local_listener = local
         cloud = self.broker()
         self.launch(
-            ["-m", "gateway.bridge"], COREIOT_DEVICE_ID=DEVICE,
-            COREIOT_MQTT_URL=f"mqtt://127.0.0.1:{cloud.getsockname()[1]}", COREIOT_DEVICE_TOKEN="gateway-test-token",
+            ["-m", "gateway.bridge"], GATEWAY_COREIOT_DEVICE_ID=device,
+            COREIOT_MQTT_URL=f"mqtt://127.0.0.1:{cloud.getsockname()[1]}",
+            GATEWAY_COREIOT_DEVICE_TOKEN="gateway-test-token", COREIOT_DEVICE_TOKEN="simulator-only-token",
             COREIOT_MQTT_CA_FILE="", GATEWAY_MQTT_HOST="127.0.0.1", GATEWAY_MQTT_PORT=str(local.getsockname()[1]),
             GATEWAY_MQTT_USERNAME="", GATEWAY_MQTT_PASSWORD="",
         )
-        local_peer, _ = self.connect(local, (LOCAL + "telemetry", LOCAL + "ack"))
+        local_prefix = f"classroom/{device}/"
+        local_peer, _ = self.connect(local, (local_prefix + "telemetry", local_prefix + "ack"))
         cloud_peer, client_id = self.connect(cloud, (RPC_REQUEST + "+",), username="gateway-test-token")
         return local_peer, cloud_peer, cloud, client_id
 
@@ -104,6 +107,9 @@ class GatewayLoopbackTests(unittest.TestCase):
             self.publish(cloud, RPC_REQUEST + request, rpc)
             topic, command = self.receive(local)
             self.assertEqual(topic, LOCAL + "cmd")
+            expires = command.pop("expiresAt")
+            self.assertGreater(expires, time_ns() // 1_000_000)
+            self.assertLessEqual(expires, time_ns() // 1_000_000 + 3500)
             self.assertEqual(command, {"id": command["id"], "method": "setLamp", "value": state, "source": "coreiot"})
             self.publish(cloud, RPC_REQUEST + request, rpc)
             ack = {"id": command["id"], "ok": True, "actualState": state, "ts": None}
@@ -145,6 +151,91 @@ class GatewayLoopbackTests(unittest.TestCase):
         self.publish(local, LOCAL + "ack", {**ack, "id": new_command["id"]})
         self.assertEqual(self.receive(cloud), (RPC_RESPONSE + "1", {**ack, "id": new_command["id"]}))
 
+    def test_firmware_payload_filters_mock_and_stale_readings_and_keeps_unknowns(self):
+        device = "classroom-01"
+        local, cloud, _, _ = self.start_gateway(device)
+        prefix = f"classroom/{device}/"
+        sample = {
+            "deviceId": device, "ts": None, "temperature": None, "humidity": None,
+            "light": None, "motion": None, "distance": None, "lamp": False,
+            "door": None, "fwVersion": "1.0.0", "mockMode": False,
+        }
+        for invalid in (
+            {**sample, "mockMode": True, "humidity": 86},
+            {**sample, "ts": 15200, "humidity": 87},
+            {**sample, "ts": time_ns() // 1_000_000 - 31000, "humidity": 88},
+            {**sample, "humidity": 101},
+            {**sample, "light": 4096},
+            {**sample, "light": 300.5},
+            {**sample, "motion": 0},
+            {**sample, "distance": 401},
+            {**sample, "deviceId": "classroom-01-sim"},
+        ):
+            self.publish(local, prefix + "telemetry", invalid)
+        self.publish(local, prefix + "telemetry", sample)
+        topic, report = self.receive(cloud)
+        self.assertEqual(topic, CLOUD_TELEMETRY)
+        self.assertEqual(report["values"], {"deviceId": device, "lamp": False, "fwVersion": "1.0.0"})
+
+        self.publish(cloud, RPC_REQUEST + "physical", {"method": "setLamp", "params": True})
+        topic, command = self.receive(local)
+        self.assertEqual(topic, prefix + "cmd")
+        self.assertGreater(command["expiresAt"], time_ns() // 1_000_000)
+        ack = {"id": command["id"], "ok": True, "actualState": False, "ts": None}
+        self.publish(local, prefix + "ack", ack)
+        self.assertEqual(self.receive(cloud), (
+            RPC_RESPONSE + "physical", {**ack, "ok": False, "error": "unexpected_state"},
+        ))
+
+        expanded = {**sample, "temperature": 28.5, "humidity": 65, "light": 850, "motion": True,
+                    "distance": 12.5, "door": False, "doorAuto": True, "fan": True}
+        self.publish(local, prefix + "telemetry", expanded)
+        _, report = self.receive(cloud)
+        expected = {key: value for key, value in expanded.items() if key not in ("ts", "mockMode", "doorAuto", "fan")}
+        self.assertEqual(report["values"], expected)
+
+        for request, desired in (("open", True), ("close", False)):
+            self.publish(cloud, RPC_REQUEST + request, {"method": "setDoor", "params": desired})
+            topic, command = self.receive(local)
+            self.assertEqual((topic, command["method"], command["value"]), (prefix + "cmd", "setDoor", desired))
+            ack = {"id": command["id"], "ok": True, "actualState": desired, "ts": None}
+            self.publish(local, prefix + "ack", {**ack, "id": "previous-door-command"})
+            self.publish(local, prefix + "ack", ack)
+            self.assertEqual(self.receive(cloud), (RPC_RESPONSE + request, ack))
+            before = time_ns() // 1_000_000
+            self.publish(local, prefix + "telemetry", {**expanded, "door": desired, "doorAuto": False})
+            topic, report = self.receive(cloud)
+            self.assertEqual(topic, CLOUD_TELEMETRY)
+            self.assertEqual(report["values"], {**expected, "door": desired})
+            self.assertGreaterEqual(report["ts"], before)
+
+        for method in ("setFan", "setDoorAuto"):
+            self.publish(cloud, RPC_REQUEST + method, {"method": method, "params": True})
+            topic, rejection = self.receive(cloud)
+            self.assertEqual((topic, rejection["error"]), (RPC_RESPONSE + method, "unsupported_method"))
+
+    def test_local_broker_disconnect_fails_inflight_and_allows_fresh_command(self):
+        local, cloud, _, _ = self.start_gateway()
+        self.publish(cloud, RPC_REQUEST + "before-loss", {"method": "setLamp", "params": False})
+        _, command = self.receive(local)
+        local.shutdown(socket.SHUT_RDWR)
+        local.close()
+        self.assertEqual(self.receive(cloud), (RPC_RESPONSE + "before-loss", {
+            "id": command["id"], "ok": False, "actualState": None,
+            "ts": None, "error": "local_broker_unavailable",
+        }))
+        local, _ = self.connect(self.local_listener, (LOCAL + "telemetry", LOCAL + "ack"))
+        self.publish(local, LOCAL + "telemetry", {
+            "deviceId": DEVICE, "ts": None, "humidity": 65, "lamp": False, "fwVersion": "1.0.0",
+        })
+        self.assertEqual(self.receive(cloud)[0], CLOUD_TELEMETRY)
+        self.publish(cloud, RPC_REQUEST + "after-loss", {"method": "setLamp", "params": True})
+        _, fresh = self.receive(local)
+        self.assertNotEqual(command["id"], fresh["id"])
+        ack = {"id": fresh["id"], "ok": True, "actualState": True, "ts": None}
+        self.publish(local, LOCAL + "ack", ack)
+        self.assertEqual(self.receive(cloud), (RPC_RESPONSE + "after-loss", ack))
+
     def test_minimal_device_simulator_publishes_new_lamp_state(self):
         broker = self.broker()
         self.launch(
@@ -182,20 +273,23 @@ class GatewayLoopbackTests(unittest.TestCase):
                 with error:
                     return error.code, json.load(error)
 
-        def wait_for_lamp(expected):
+        def wait_state(key, expected):
             deadline = monotonic() + 4
             while monotonic() < deadline:
                 status, body = request("/sensors")
-                if body["lamp"] is expected:
+                if body[key] is expected:
                     self.assertEqual(status, 200)
                     return body
                 sleep(0.05)
-            self.fail(f"Dashboard did not show lamp={expected}")
+            self.fail(f"Dashboard did not show {key}={expected}")
 
-        sample = {"deviceId": DEVICE, "ts": None, "humidity": 65, "lamp": False, "fwVersion": "1.0.0"}
+        sample = {"deviceId": DEVICE, "ts": None, "humidity": 65, "lamp": False, "fwVersion": "1.0.0",
+                  "distance": 12.5, "motion": True, "light": 850, "door": False, "doorAuto": True}
         self.publish(peer, LOCAL + "telemetry", sample)
-        readings = wait_for_lamp(False)
+        readings = wait_state("lamp", False)
         self.assertEqual(readings["humidity"], 65)
+        for key in ("fwVersion", "distance", "motion", "light", "door", "doorAuto"):
+            self.assertEqual(readings[key], sample[key])
         self.assertIsNone(readings["temperature"])
         self.assertIsNotNone(readings["receivedAt"])
         self.assertEqual(request("/led", 1), (400, {"error": "invalid_value"}))
@@ -204,6 +298,7 @@ class GatewayLoopbackTests(unittest.TestCase):
             result = executor.submit(request, "/led", True)
             topic, command = self.receive(peer)
             self.assertEqual(topic, LOCAL + "cmd")
+            self.assertGreater(command.pop("expiresAt"), time_ns() // 1_000_000)
             self.assertEqual(command, {"id": command["id"], "method": "setLamp", "value": True, "source": "gateway"})
             ack = {"id": command["id"], "ok": True, "actualState": True, "ts": None}
             self.publish(peer, LOCAL + "ack", {**ack, "id": "different-command"})
@@ -212,7 +307,19 @@ class GatewayLoopbackTests(unittest.TestCase):
             self.assertIs(request("/sensors")[1]["lamp"], False)
 
             self.publish(peer, LOCAL + "telemetry", {**sample, "lamp": True})
-            wait_for_lamp(True)
+            wait_state("lamp", True)
+            for path, method, status_key, report in (
+                ("/door", "setDoor", "door", {"door": True, "doorAuto": False}),
+                ("/door-auto", "setDoorAuto", "doorAuto", {"door": True, "doorAuto": True}),
+            ):
+                result = executor.submit(request, path, True)
+                topic, command = self.receive(peer)
+                self.assertEqual((topic, command["method"], command["value"]), (LOCAL + "cmd", method, True))
+                ack = {"id": command["id"], "ok": True, "actualState": True, "ts": None}
+                self.publish(peer, LOCAL + "ack", ack)
+                self.assertEqual(result.result(timeout=6), (200, ack))
+                self.publish(peer, LOCAL + "telemetry", {**sample, **report, "lamp": True})
+                self.assertEqual(wait_state(status_key, True)["doorAuto"], report["doorAuto"])
             result = executor.submit(request, "/led", False)
             _, command = self.receive(peer)
             status, timeout = result.result(timeout=6)

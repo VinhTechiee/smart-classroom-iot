@@ -9,8 +9,6 @@ namespace Actuators {
 
     bool setLamp(bool state);
 
-    bool setFan(bool state);
-
     bool setDoor(bool state);
 
     void updateLCD(const ClassroomData& data);

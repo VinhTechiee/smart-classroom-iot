@@ -1,0 +1,220 @@
+{
+  "title": "Smart Classroom - Public Monitoring",
+  "configuration": {
+    "widgets": {
+      "14480696-1aff-500b-994b-be394a688a3e": {
+        "id": "14480696-1aff-500b-994b-be394a688a3e",
+        "typeFullFqn": "system.cards.entities_table",
+        "type": "latest",
+        "row": 0,
+        "col": 0,
+        "sizeX": 24,
+        "sizeY": 4,
+        "config": {
+          "title": "Temperature and humidity (last reported)",
+          "showTitle": true,
+          "backgroundColor": "#ffffff",
+          "color": "#26354a",
+          "padding": "8px",
+          "dropShadow": true,
+          "enableFullscreen": true,
+          "actions": {},
+          "datasources": [
+            {
+              "type": "entity",
+              "entityAliasId": "80ef0f9d-8edb-43d5-95f1-af0fbc809100",
+              "dataKeys": [
+                {
+                  "name": "temperature",
+                  "label": "Temperature (\u00b0C)",
+                  "type": "timeseries",
+                  "color": "#ad442c",
+                  "settings": {}
+                },
+                {
+                  "name": "humidity",
+                  "label": "Humidity (% RH)",
+                  "type": "timeseries",
+                  "color": "#236c94",
+                  "settings": {}
+                }
+              ]
+            }
+          ],
+          "settings": {
+            "entitiesTitle": "Temperature and humidity (last reported)",
+            "enableSearch": false,
+            "enableSelectColumnDisplay": false,
+            "enableStickyHeader": true,
+            "displayEntityName": false,
+            "displayEntityLabel": false,
+            "displayEntityType": false,
+            "displayPagination": false,
+            "defaultPageSize": 10
+          }
+        }
+      },
+      "99457248-d0e9-5da5-bfb3-044ffcfd4565": {
+        "id": "99457248-d0e9-5da5-bfb3-044ffcfd4565",
+        "typeFullFqn": "system.time_series_chart",
+        "type": "timeseries",
+        "row": 4,
+        "col": 0,
+        "sizeX": 12,
+        "sizeY": 7,
+        "config": {
+          "title": "Temperature history",
+          "showTitle": true,
+          "backgroundColor": "#ffffff",
+          "color": "#26354a",
+          "padding": "0px",
+          "dropShadow": true,
+          "enableFullscreen": true,
+          "actions": {},
+          "datasources": [
+            {
+              "type": "entity",
+              "entityAliasId": "80ef0f9d-8edb-43d5-95f1-af0fbc809100",
+              "dataKeys": [
+                {
+                  "name": "temperature",
+                  "label": "Temperature (\u00b0C)",
+                  "type": "timeseries",
+                  "color": "#ad442c",
+                  "settings": {}
+                }
+              ]
+            }
+          ],
+          "useDashboardTimewindow": true,
+          "settings": {
+            "dataZoom": true,
+            "showLegend": false,
+            "showTooltip": true,
+            "yAxes": {
+              "default": {
+                "id": "default",
+                "decimals": 1,
+                "units": "\u00b0C"
+              }
+            }
+          }
+        }
+      },
+      "ecfdf9d1-2548-51fb-98f5-2885e0ba6359": {
+        "id": "ecfdf9d1-2548-51fb-98f5-2885e0ba6359",
+        "typeFullFqn": "system.time_series_chart",
+        "type": "timeseries",
+        "row": 4,
+        "col": 12,
+        "sizeX": 12,
+        "sizeY": 7,
+        "config": {
+          "title": "Humidity history",
+          "showTitle": true,
+          "backgroundColor": "#ffffff",
+          "color": "#26354a",
+          "padding": "0px",
+          "dropShadow": true,
+          "enableFullscreen": true,
+          "actions": {},
+          "datasources": [
+            {
+              "type": "entity",
+              "entityAliasId": "80ef0f9d-8edb-43d5-95f1-af0fbc809100",
+              "dataKeys": [
+                {
+                  "name": "humidity",
+                  "label": "Humidity (% RH)",
+                  "type": "timeseries",
+                  "color": "#236c94",
+                  "settings": {}
+                }
+              ]
+            }
+          ],
+          "useDashboardTimewindow": true,
+          "settings": {
+            "dataZoom": true,
+            "showLegend": false,
+            "showTooltip": true,
+            "yAxes": {
+              "default": {
+                "id": "default",
+                "decimals": 1,
+                "units": "%"
+              }
+            }
+          }
+        }
+      }
+    },
+    "states": {
+      "default": {
+        "name": "Smart Classroom | Temperature and Humidity",
+        "root": true,
+        "layouts": {
+          "main": {
+            "widgets": {
+              "14480696-1aff-500b-994b-be394a688a3e": {
+                "row": 0,
+                "col": 0,
+                "sizeX": 24,
+                "sizeY": 4
+              },
+              "99457248-d0e9-5da5-bfb3-044ffcfd4565": {
+                "row": 4,
+                "col": 0,
+                "sizeX": 12,
+                "sizeY": 7
+              },
+              "ecfdf9d1-2548-51fb-98f5-2885e0ba6359": {
+                "row": 4,
+                "col": 12,
+                "sizeX": 12,
+                "sizeY": 7
+              }
+            },
+            "gridSettings": {
+              "layoutType": "default",
+              "columns": 24,
+              "margin": 10,
+              "outerMargin": true,
+              "backgroundColor": "#f1f4f8"
+            }
+          }
+        }
+      }
+    },
+    "entityAliases": {
+      "80ef0f9d-8edb-43d5-95f1-af0fbc809100": {
+        "id": "80ef0f9d-8edb-43d5-95f1-af0fbc809100",
+        "alias": "Public environmental data",
+        "filter": {
+          "type": "entityName",
+          "resolveMultiple": false,
+          "entityType": "DEVICE",
+          "entityNameFilter": "classroom-public"
+        }
+      }
+    },
+    "filters": {},
+    "timewindow": {
+      "selectedTab": 0,
+      "realtime": {
+        "realtimeType": 0,
+        "timewindowMs": 1800000,
+        "interval": 1000
+      },
+      "aggregation": {
+        "type": "NONE",
+        "limit": 1000
+      }
+    },
+    "settings": {
+      "stateControllerId": "default",
+      "showTitle": true,
+      "showDashboardTimewindow": true
+    }
+  }
+}

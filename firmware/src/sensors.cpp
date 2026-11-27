@@ -15,6 +15,8 @@
 static DHT20 dht20;
 static bool i2cReady = false;
 static bool dhtReady = false;
+static unsigned long pirStartedMs = 0;
+static bool pirWarmingUp = true;
 static NearDoorTracker nearTracker;
 
 static IRrecv irrecv(IR_PIN);
@@ -29,12 +31,14 @@ bool Sensors::begin() {
     }
 
     if (HAS_PIR) {
-        pinMode(PIR_PIN, INPUT);
+        pinMode(PIR_PIN, PIR_ACTIVE_HIGH ? INPUT_PULLDOWN : INPUT_PULLUP);
+        pirStartedMs = millis();
     }
 
     if (HAS_LIGHT_SENSOR) {
         pinMode(LIGHT_PIN, INPUT);
         analogReadResolution(12);
+        analogSetPinAttenuation(LIGHT_PIN, ADC_11db);
     }
 
     if (HAS_ULTRASONIC) {
@@ -150,7 +154,11 @@ bool Sensors::readMotion(bool& motion) {
         return true;
     }
     else {
-        motion = (digitalRead(PIR_PIN) == HIGH);
+        if (pirWarmingUp && millis() - pirStartedMs < PIR_WARMUP_MS) {
+            return false;
+        }
+        pirWarmingUp = false;
+        motion = digitalRead(PIR_PIN) == (PIR_ACTIVE_HIGH ? HIGH : LOW);
         return true;
     }
 }

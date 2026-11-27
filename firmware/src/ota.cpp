@@ -15,6 +15,10 @@ static std::atomic<bool> otaUpdating{false};
 // 1. Initialize OTA
 
 void FirmwareOTA::begin() {
+#if defined(SMART_CLASSROOM_COREIOT_OTA)
+    CoreIotOTA::begin();
+    return;
+#endif
     if (otaReady == true) {
         return;
     }
@@ -35,9 +39,9 @@ void FirmwareOTA::begin() {
     // OTA starts
     ArduinoOTA.onStart([]() {
 
-        otaUpdating.store(true);
-
-        Automation::waitForIdle();
+        if (!startUpdate()) {
+            Serial.println("OTA could not set outputs to their safe state");
+        }
 
         Serial.println("OTA update started");
 
@@ -71,7 +75,7 @@ void FirmwareOTA::begin() {
     // OTA error
     ArduinoOTA.onError([](ota_error_t error) {
 
-        otaUpdating.store(false);
+        finishUpdate();
 
         Serial.printf(
             "OTA Error: %u\n",
@@ -103,4 +107,17 @@ void FirmwareOTA::update() {
 
 bool FirmwareOTA::isUpdating() {
     return otaUpdating.load();
+}
+
+bool FirmwareOTA::startUpdate() {
+    otaUpdating.store(true);
+    if (Automation::prepareForUpdate()) {
+        return true;
+    }
+    otaUpdating.store(false);
+    return false;
+}
+
+void FirmwareOTA::finishUpdate() {
+    otaUpdating.store(false);
 }

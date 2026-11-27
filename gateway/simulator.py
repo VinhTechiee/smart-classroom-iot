@@ -10,7 +10,7 @@ from threading import TIMEOUT_MAX, Event, Lock
 import paho.mqtt.client as mqtt
 
 
-ACTUATORS = {"setLamp": "lamp", "setFan": "fan", "setDoor": "door"}
+ACTUATORS = {"setLamp": "lamp", "setDoor": "door", "setDoorAuto": "doorAuto"}
 ACK_CACHE_SIZE = 128
 
 
@@ -18,7 +18,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--host", default="127.0.0.1", help="MQTT broker host")
     parser.add_argument("--port", type=int, default=1883, help="MQTT broker port")
-    parser.add_argument("--device-id", default="classroom-01", help="Simulated classroom identifier")
+    parser.add_argument("--device-id", default="classroom-01-sim", help="Simulated classroom identifier")
     parser.add_argument("--interval", type=float, default=5, help="Seconds between telemetry messages")
     parser.add_argument("--minimal", action="store_true", help="Only simulate humidity and the board LED")
     parser.add_argument("--humidity", type=float, default=65.0, help="Synthetic relative humidity in percent")
@@ -27,6 +27,8 @@ def main():
     args = parser.parse_args()
     if not args.device_id.strip() or any(char in args.device_id for char in "/+#\0"):
         parser.error("--device-id must be a single MQTT topic level")
+    if args.device_id in ("classroom-01", "classroom-ota-board", "classroom-ota-virtual"):
+        parser.error("Use a synthetic classroom identifier")
     if not 1 <= args.port <= 65535:
         parser.error("--port must be between 1 and 65535")
     if not 0 < args.interval <= TIMEOUT_MAX:
@@ -45,7 +47,7 @@ def main():
         "fwVersion": "1.0.0",
     }
     if not args.minimal:
-        sample.update(temperature=28.5, light=320, motion=True, distance=42.0, fan=False, door=False)
+        sample.update(temperature=28.5, light=320, motion=True, distance=42.0, door=False, doorAuto=False)
     if args.temperature is not None:
         sample["temperature"] = args.temperature
     sample_lock = Lock()
@@ -102,6 +104,8 @@ def main():
                 ack["error"] = "invalid_value"
             else:
                 sample[actuator] = value
+                if actuator == "door":
+                    sample["doorAuto"] = False
                 ack.update(ok=True, actualState=value)
 
             encoded_ack = json.dumps(ack)

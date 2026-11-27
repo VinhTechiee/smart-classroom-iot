@@ -1,9 +1,9 @@
 import json
 import unittest
 
-from coreiot.simulator.__main__ import parse_connection
+from shared.cloud_config import parse_connection
 from coreiot.simulator.classroom import DEFAULT_READINGS, Simulator
-from coreiot.simulator.gateway import (
+from shared.coreiot import (
     RPC_REQUEST_PREFIX,
     RPC_RESPONSE_PREFIX,
     TELEMETRY_TOPIC,
@@ -32,14 +32,14 @@ class RpcBridgeTests(unittest.TestCase):
 
     def test_concurrent_acks_are_paired_by_classroom_and_unique_command_id(self):
         lamp = self.command("10", "setLamp", True)
-        fan = self.command("11", "setFan", False)
+        door = self.command("11", "setDoor", False)
         self.assertEqual(lamp.topic, f"classroom/{DEVICE}/cmd")
         self.assertEqual(lamp.body, {"id": lamp.body["id"], "method": "setLamp", "value": True, "source": "coreiot"})
-        self.assertNotEqual(lamp.body["id"], fan.body["id"])
+        self.assertNotEqual(lamp.body["id"], door.body["id"])
         self.assertIsNone(self.bridge.accept_ack("classroom/other/ack", ack(lamp.body["id"], True), 0.1))
         self.assertIsNone(self.bridge.accept_ack(self.bridge.ack_topic, ack("unrelated-command", True), 0.1))
         self.assertEqual(self.bridge.pending_count, 2)
-        second = self.bridge.accept_ack(self.bridge.ack_topic, ack(fan.body["id"], False), 0.2)
+        second = self.bridge.accept_ack(self.bridge.ack_topic, ack(door.body["id"], False), 0.2)
         first = self.bridge.accept_ack(self.bridge.ack_topic, ack(lamp.body["id"], True), 0.3)
         self.assertEqual((second.topic, second.body["actualState"]), (RPC_RESPONSE_PREFIX + "11", False))
         self.assertEqual((first.topic, first.body["actualState"]), (RPC_RESPONSE_PREFIX + "10", True))
@@ -51,7 +51,7 @@ class RpcBridgeTests(unittest.TestCase):
             (b'{"method":"setFan","params":NaN}', True, "invalid_json"),
             (request("setWindow", True), True, "unsupported_method"),
             (request("constructor", True), True, "unsupported_method"),
-            (request("setFan", 1), True, "invalid_value"),
+            (request("setDoor", 1), True, "invalid_value"),
             (request("setLamp", "true"), True, "invalid_value"),
             (request("setDoor", {"value": True}), True, "invalid_value"),
             (request("setLamp", True), False, "unknown_device"),
@@ -160,13 +160,13 @@ class SimulatorTests(unittest.TestCase):
         self.assertEqual(simulator.step(0.5, SOURCE_TS + 500), [])
         self.assertIs(simulator.sample(SOURCE_TS + 500).body["values"]["lamp"], False)
 
-    def test_three_actuators_report_fresh_state_after_execution(self):
+    def test_two_actuators_report_fresh_state_after_execution(self):
         simulator = Simulator(RpcBridge(DEVICE, 1), ack_delay=0, synchronized=False)
         simulator.connected(0)
         initial = simulator.step(0, SOURCE_TS)[0]
         self.assertEqual(initial.topic, TELEMETRY_TOPIC)
         self.assertEqual(initial.body, {"ts": SOURCE_TS, "values": {**DEFAULT_READINGS, "deviceId": DEVICE}})
-        for index, (method, state) in enumerate((("setLamp", "lamp"), ("setFan", "fan"), ("setDoor", "door"))):
+        for index, (method, state) in enumerate((("setLamp", "lamp"), ("setDoor", "door"))):
             for value in (True, False):
                 now = index + 1 + int(not value) / 2
                 wall = SOURCE_TS + int(now * 1000)

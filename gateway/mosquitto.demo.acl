@@ -1,0 +1,17 @@
+user classroom-board
+topic write classroom/classroom-01/telemetry
+topic write classroom/classroom-01/ack
+topic read classroom/classroom-01/cmd
+
+user classroom-ota-board
+topic write classroom/classroom-ota-board/telemetry
+topic write classroom/classroom-ota-board/ack
+topic read classroom/classroom-ota-board/cmd
+
+user classroom-gateway
+topic read classroom/classroom-01/telemetry
+topic read classroom/classroom-01/ack
+topic write classroom/classroom-01/cmd
+topic read classroom/classroom-ota-board/telemetry
+topic read classroom/classroom-ota-board/ack
+topic write classroom/classroom-ota-board/cmd

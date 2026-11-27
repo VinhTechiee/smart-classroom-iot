@@ -5,11 +5,10 @@ The JavaScript files are rule node bodies for a sandbox CoreIOT tenant, with the
 | Decision | Turn on or open | Turn off or clear | Staging gate |
 | --- | --- | --- | --- |
 | Lamp | `motion = true` and `light < 250` raw | `motion = false` or `light >= 350` raw | Explicit automation enable and explicit override release |
-| Fan | `temperature > 30` °C | `temperature < 28` °C | Explicit automation enable and explicit override release |
 | `Classroom High Temperature` | `temperature >= 35` °C | `temperature <= 33` °C | Fresh valid temperature |
 | `Classroom Door Proximity` | `door = true` and `distance <= 15` cm | `door = false` or `distance >= 25` cm | Explicit sandbox proximity opt-in with valid `door` and `distance` |
 
-Set the lamp and fan thresholds together using [sandbox-settings.json](sandbox-settings.json). The gap between thresholds keeps the reported state or existing alarm status. For the lamp, a valid inactive sample can turn it off even if it is dark. Keep actual PIR retention and the lamp's effect on the light sensor in mind when approving the physical thresholds. Lamp and fan changes require valid input fields and a reported Boolean actuator state that differs from the desired state. The proximity rule uses the reported door state and a distance reading as a staging event definition. Any physical proximity alert depends on the sensor facing the door and the team approving what the readings mean. Door control remains manual. [Shared protocol](../../shared/PROTOCOL.md)
+Set both sandbox lamp thresholds using [sandbox-settings.json](sandbox-settings.json). The gap between thresholds keeps the reported state or existing alarm status. For the lamp, a valid inactive sample can turn it off even if it is dark. Keep actual PIR retention and the lamp's effect on the light sensor in mind when approving the physical thresholds. Lamp changes require valid input fields and a reported Boolean actuator state that differs from the desired state. The proximity rule uses the reported door state and a distance reading as a staging event definition. Any physical proximity alert depends on the sensor facing the door and the team approving what the readings mean. This sandbox chain never moves the door. Use the deployed humidity RuleChain for the physical classroom. [Shared protocol](../../shared/PROTOCOL.md)
 
 ## Add the sandbox chain
 
@@ -61,8 +60,8 @@ With the simulator attached and the request filter wired to **Log**, set `classr
 
 | Simulation input | Expected candidate |
 | --- | --- |
-| `motion=true`, `light=100`, `lamp=false`, `temperature=31`, `fan=false` | `setLamp` and `setFan` with `params:true` |
-| `motion=false`, `light=100`, `lamp=true`, `temperature=27`, `fan=true` | `setLamp` and `setFan` with `params:false` |
+| `motion=true`, `light=100`, `lamp=false`, `temperature=31` | `setLamp` with `params:true` |
+| `motion=false`, `light=100`, `lamp=true`, `temperature=27` | `setLamp` with `params:false` |
 | `motion=true`, `light=400`, `lamp=true` | `setLamp` with `params:false` |
 | `motion=true`, `light=300`, `temperature=29` | Hold reported states |
 | Repeat the turn-on case with `classroomManualOverride=true` | No candidate until explicit release |
@@ -95,7 +94,7 @@ Before each sequence, establish a recovered reading so the first trigger creates
 
 `classroomAutomationEnabled` and `classroomManualOverride` are staging server attributes. A and B need an agreed way to report local manual actions and release events before the project uses cloud automation on physical actuators. The current boolean RPC payload contains no indication of command intent, and both dashboard and automatic cloud commands would reach the current local contract with `source: "coreiot"`.
 
-Proposed policy is that accepting a manual lamp or fan action from firmware, gateway UI, or cloud begins an indefinite per-classroom manual override. Only an explicit release ends it. The component that applies actuator changes must enforce the override at application time. Agree on authenticated signalling for manual and automatic intent and a monotonic override revision, so a queued automatic command from before a manual action or release can be rejected. Agree how A's local web UI and B's gateway synchronize override transitions with C, and how to fail closed if that state is unknown after reconnect. The current staging flags prevent creating new commands while the override is active. An already-issued RPC can still arrive. Leave physical automation off until the team agrees and validates the application-time policy. [Shared protocol](../../shared/PROTOCOL.md)
+Proposed policy is that accepting a manual lamp action from firmware, gateway UI, or cloud begins an indefinite per-classroom manual override. Only an explicit release ends it. The component that applies actuator changes must enforce the override at application time. Agree on authenticated signalling for manual and automatic intent and a monotonic override revision, so a queued automatic command from before a manual action or release can be rejected. Agree how A's local web UI and B's gateway synchronize override transitions with C, and how to fail closed if that state is unknown after reconnect. The current staging flags prevent creating new commands while the override is active. An already-issued RPC can still arrive. Leave physical automation off until the team agrees and validates the application-time policy. [Shared protocol](../../shared/PROTOCOL.md)
 
 ## Local verification
 

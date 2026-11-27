@@ -1,4 +1,4 @@
-"""Serve the local classroom dashboard and route its LED commands over MQTT."""
+"""Serve the local classroom dashboard and route its controls over MQTT."""
 
 import argparse
 import json
@@ -9,13 +9,14 @@ from pathlib import Path
 from time import monotonic, time_ns
 from uuid import uuid4
 
-from coreiot.simulator.__main__ import read_environment
-from coreiot.simulator.gateway import Publication, cloud_telemetry, failure, json_object, valid_ack
-from gateway.bridge import BrokerSettings, MqttLink, local_broker_settings
+from shared.cloud_config import read_environment
+from shared.coreiot import Publication, failure, fresh_telemetry, json_object, production_telemetry, valid_ack
+from gateway.bridge import ACK_TIMEOUT, BrokerSettings, MqttLink, local_broker_settings, with_command_deadline
 
 
-ACK_TIMEOUT = 3.5
 LOGGER = logging.getLogger(__name__)
+LOCAL_CONTROLS = {"/led": "setLamp", "/door": "setDoor", "/door-auto": "setDoorAuto"}
+READINGS = ("temperature", "humidity", "light", "motion", "distance", "lamp", "door", "doorAuto", "fwVersion")
 
 
 class LocalDashboard:
@@ -31,8 +32,15 @@ class LocalDashboard:
         self.readings = {}
         self.received_at = None
         self.pending_id = None
+        self.ack_deadline = 0.0
         self.ack = None
-        self.mqtt = MqttLink("Local MQTT", broker, (self.telemetry_topic, self.ack_topic), self.on_message)
+        self.mqtt = MqttLink(
+            "Local MQTT", broker, (self.telemetry_topic, self.ack_topic), self.on_message, self.clear_readings,
+        )
+
+    def clear_readings(self):
+        self.readings = {}
+        self.received_at = None
 
     def on_message(self, message):
         if message.retain:
@@ -41,38 +49,45 @@ class LocalDashboard:
             body = json_object(message.payload)
             if message.topic == self.telemetry_topic:
                 received_at = time_ns() // 1_000_000
-                sample = cloud_telemetry(message.topic, body, self.device_id, received_at, minimal=True)
+                sample = production_telemetry(message.topic, body, self.device_id, received_at, minimal=False)
                 self.readings = sample.body["values"]
-                self.received_at = received_at
+                if type(body.get("doorAuto")) is bool:
+                    self.readings["doorAuto"] = body["doorAuto"]
+                self.received_at = sample.body["ts"]
             elif message.topic == self.ack_topic and self.pending_id is not None:
-                if self.ack is None and body.get("id") == self.pending_id and valid_ack(body):
+                if (
+                    self.ack is None and monotonic() < self.ack_deadline
+                    and body.get("id") == self.pending_id and valid_ack(body)
+                ):
                     self.ack = body
         except ValueError as exc:
             LOGGER.warning("Ignored %s: %s", message.topic, exc)
 
     def sensors(self) -> dict:
+        readings = self.readings if (
+            self.mqtt.ready and self.received_at is not None
+            and fresh_telemetry(self.received_at, time_ns() // 1_000_000)
+        ) else {}
         return {
             "deviceId": self.device_id,
-            "humidity": self.readings.get("humidity"),
-            "temperature": self.readings.get("temperature"),
-            "lamp": self.readings.get("lamp"),
+            **{key: readings.get(key) for key in READINGS},
             "receivedAt": self.received_at,
             "brokerConnected": self.mqtt.ready,
         }
 
-    def set_lamp(self, value: bool) -> tuple[HTTPStatus, dict]:
+    def set_control(self, method: str, value: bool) -> tuple[HTTPStatus, dict]:
         command_id = f"web-{uuid4().hex}"
         command = Publication(self.command_topic, {
-            "id": command_id, "method": "setLamp", "value": value, "source": "gateway",
+            "id": command_id, "method": method, "value": value, "source": "gateway",
         })
         self.pending_id = command_id
+        self.ack_deadline = monotonic() + ACK_TIMEOUT
         self.ack = None
         try:
-            if not self.mqtt.publish(command):
+            if not self.mqtt.publish(with_command_deadline(command)):
                 return HTTPStatus.SERVICE_UNAVAILABLE, failure(command_id, "local_broker_unavailable")
 
-            deadline = monotonic() + ACK_TIMEOUT
-            while self.mqtt.ready and self.ack is None and monotonic() < deadline:
+            while self.mqtt.ready and self.ack is None and monotonic() < self.ack_deadline:
                 self.mqtt.pump()
             if self.ack is None:
                 if not self.mqtt.ready:
@@ -101,7 +116,8 @@ class DashboardHandler(BaseHTTPRequestHandler):
             self.send_json(HTTPStatus.NOT_FOUND, {"error": "not_found"})
 
     def do_POST(self):
-        if self.path != "/led":
+        method = LOCAL_CONTROLS.get(self.path)
+        if method is None:
             self.send_json(HTTPStatus.NOT_FOUND, {"error": "not_found"})
             return
         if self.headers.get_content_type() != "application/json":
@@ -114,11 +130,11 @@ class DashboardHandler(BaseHTTPRequestHandler):
             body = json_object(self.rfile.read(size))
             value = body.get("value")
             if type(value) is not bool:
-                raise ValueError("LED value must be a JSON boolean")
+                raise ValueError("Control value must be a JSON boolean")
         except ValueError:
             self.send_json(HTTPStatus.BAD_REQUEST, {"error": "invalid_value"})
             return
-        status, ack = self.server.dashboard.set_lamp(value)
+        status, ack = self.server.dashboard.set_control(method, value)
         self.send_json(status, ack)
 
     def send_json(self, status, body):
@@ -157,7 +173,7 @@ def main() -> int:
         parser.error("--port must be between 0 and 65535")
     try:
         values = read_environment(args.env_file)
-        device_id = args.device_id or values.get("COREIOT_DEVICE_ID") or "classroom-01"
+        device_id = args.device_id or values.get("GATEWAY_COREIOT_DEVICE_ID") or "classroom-01"
         dashboard = LocalDashboard(device_id, local_broker_settings(values))
         with DashboardServer(args.port, dashboard) as server:
             print(f"Dashboard: http://127.0.0.1:{server.server_port}", flush=True)

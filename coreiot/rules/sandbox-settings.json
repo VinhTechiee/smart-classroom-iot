@@ -1,6 +1,4 @@
 {
   "lampOnBelow": 250,
-  "lampOffAt": 350,
-  "fanOnAbove": 30,
-  "fanOffBelow": 28
+  "lampOffAt": 350
 }

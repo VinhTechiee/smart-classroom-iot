@@ -4,6 +4,7 @@
 #include "system_data.h"
 #include "automation.h"
 #include "ota.h"
+#include "command_deadline.h"
 
 #include <Arduino.h>
 #include <WiFi.h>
@@ -31,6 +32,15 @@ static constexpr uint16_t CLIENT_BUFFER_BYTES =
 static constexpr size_t MAX_JSON_BYTES = 768;
 
 static constexpr size_t MAX_COMMAND_ID_BYTES = 96;
+
+struct ExecutedCommand {
+    char id[MAX_COMMAND_ID_BYTES + 1]{};
+    uint64_t expiresAt = 0;
+    ControlResult result;
+    const char* error = nullptr;
+};
+static ExecutedCommand executed[32];
+static bool reportAfterCommand = false;
 
 static constexpr unsigned long TELEMETRY_STALE_MS =
     SENSOR_STALE_MS;
@@ -92,9 +102,12 @@ static bool publishAck(
 
     ack["id"] = id;
     ack["ok"] = result.ok;
-    ack["actualState"] = result.actualState;
-    ack["stateKnown"] = result.stateKnown;
-    ack["ts"] = millis();
+    if (result.stateKnown) {
+        ack["actualState"] = result.actualState;
+    } else {
+        ack["actualState"] = nullptr;
+    }
+    ack["ts"] = nullptr;
 
     if (error != nullptr) {
         ack["error"] = error;
@@ -118,9 +131,6 @@ static bool parseMethod(
     if (strcmp(method, "setLamp") == 0) {
         target = ControlTarget::Lamp;
     }
-    else if (strcmp(method, "setFan") == 0) {
-        target = ControlTarget::Fan;
-    }
     else if (strcmp(method, "setDoor") == 0) {
         target = ControlTarget::Door;
     }
@@ -138,9 +148,6 @@ static bool isTargetAvailable(ControlTarget target) {
 
         case ControlTarget::Lamp:
             return HAS_EXTERNAL_LAMP || HAS_ONBOARD_LED;
-
-        case ControlTarget::Fan:
-            return HAS_FAN;
 
         case ControlTarget::Door:
             return HAS_SERVO;
@@ -220,6 +227,35 @@ static void onMessage(
 
     ControlResult failed;
 
+    uint64_t now = epochMillis();
+    uint64_t expiresAt = cmd["expiresAt"].as<uint64_t>();
+    if (!cmd["expiresAt"].is<uint64_t>() || !validCommandDeadline(now, expiresAt)) {
+        publishAck(id, failed, now == 0 ? "clock_unsynchronized" : "invalid_or_expired_deadline");
+        return;
+    }
+    ExecutedCommand* slot = nullptr;
+    for (auto& entry : executed) {
+        if (entry.expiresAt > now && strcmp(entry.id, id) == 0) {
+            publishAck(id, entry.result, entry.error);
+            return;
+        }
+        if (!slot && entry.expiresAt <= now) {
+            slot = &entry;
+        }
+    }
+    if (!slot) {
+        publishAck(id, failed, "device_busy");
+        return;
+    }
+    auto finish = [&](const ControlResult& result, const char* error) {
+        strcpy(slot->id, id);
+        slot->expiresAt = expiresAt;
+        slot->result = result;
+        slot->error = error;
+        reportAfterCommand |= result.ok;
+        publishAck(id, result, error);
+    };
+
     // Validate method
 
     if (!cmd["method"].is<const char*>()) {
@@ -235,166 +271,41 @@ static void onMessage(
     JsonString method =
         cmd["method"].as<JsonString>();
 
-    ControlTarget target = ControlTarget::Lamp;
-
-    // Optional extended MQTT schema
-
-    if (
-        MQTT_EXTENDED_SCHEMA &&
-        method.size() == 7 &&
-        strcmp(method.c_str(), "setMode") == 0
-    ) {
-
-        JsonString targetName =
-            cmd["target"].as<JsonString>();
-
-        const char* name = targetName.c_str();
-
-        if (
-            name &&
-            memchr(
-                name,
-                '\0',
-                targetName.size()
-            ) != nullptr
-        ) {
-            name = nullptr;
-        }
-
-        bool validTarget = false;
-
-        if (name && strcmp(name, "lamp") == 0) {
-            target = ControlTarget::Lamp;
-            validTarget = true;
-        }
-        else if (name && strcmp(name, "fan") == 0) {
-            target = ControlTarget::Fan;
-            validTarget = true;
-        }
-        else if (name && strcmp(name, "door") == 0) {
-            target = ControlTarget::Door;
-            validTarget = true;
-        }
-
-        if (
-            !validTarget ||
-            !cmd["value"].is<bool>() ||
-            FirmwareOTA::isUpdating()
-        ) {
-
-            publishAck(
-                id,
-                failed,
-                "invalid mode request or OTA active"
-            );
-
-            return;
-        }
-        if (!isTargetAvailable(target)) {
-
-    publishAck(
-        id,
-        failed,
-        "device unavailable"
-    );
-
-    return;
-}
-        ControlResult modeResult;
-
-        modeResult.ok = Automation::setAutomatic(
-            target,
-            cmd["value"].as<bool>()
-        );
-
-        ClassroomData snapshot =
-            SystemData::getSnapshot();
-
-        if (target == ControlTarget::Lamp) {
-
-            modeResult.actualState =
-                snapshot.actuators.lamp;
-
-            modeResult.stateKnown =
-                snapshot.actuators.lampKnown;
-        }
-        else if (target == ControlTarget::Fan) {
-
-            modeResult.actualState =
-                snapshot.actuators.fan;
-
-            modeResult.stateKnown =
-                snapshot.actuators.fanKnown;
-        }
-        else {
-
-            modeResult.actualState =
-                snapshot.actuators.door;
-
-            modeResult.stateKnown =
-                snapshot.actuators.doorKnown;
-        }
-
-        publishAck(
-            id,
-            modeResult,
-            modeResult.ok ? nullptr : "mode change failed"
-        );
-
-        return;
-    }
-
-    // Original command schema
-
-    if (
-        method.size() == 0 ||
-        memchr(
-            method.c_str(),
-            '\0',
-            method.size()
-        ) != nullptr ||
-        !parseMethod(method.c_str(), target)
-    ) {
-        publishAck(
-            id,
-            failed,
-            "unknown method"
-        );
-
-        return;
-    }
-
     if (!cmd["value"].is<bool>()) {
-
-        publishAck(
-            id,
-            failed,
-            "value must be boolean"
-        );
-
+        publishAck(id, failed, "invalid_value");
+        return;
+    }
+    if (method.size() == 0 || memchr(method.c_str(), '\0', method.size()) != nullptr) {
+        publishAck(id, failed, "unsupported_method");
+        return;
+    }
+    if (FirmwareOTA::isUpdating()) {
+        publishAck(id, failed, "ota_in_progress");
+        return;
+    }
+    const char* source = cmd["source"] | "";
+    if (strcmp(method.c_str(), "setDoorAuto") == 0 && strcmp(source, "gateway") == 0) {
+        const bool enabled = cmd["value"].as<bool>();
+        ControlResult mode;
+        mode.ok = Automation::setAutomatic(ControlTarget::Door, enabled, expiresAt);
+        mode.actualState = enabled;
+        mode.stateKnown = mode.ok;
+        finish(mode, mode.ok ? nullptr : "mode_change_failed");
+        return;
+    }
+    ControlTarget target;
+    if (!parseMethod(method.c_str(), target)) {
+        publishAck(id, failed, "unsupported_method");
+        return;
+    }
+    if (target == ControlTarget::Lamp && LAMP_LOCAL_AVAILABLE && strcmp(source, "gateway") != 0) {
+        publishAck(id, failed, "lamp_owned_locally");
         return;
     }
 
     bool value = cmd["value"].as<bool>();
     if (!isTargetAvailable(target)) {
-
-    publishAck(
-        id,
-        failed,
-        "device unavailable"
-    );
-
-    return;
-}
-
-    if (FirmwareOTA::isUpdating()) {
-
-        publishAck(
-            id,
-            failed,
-            "OTA in progress"
-        );
-
+        publishAck(id, failed, "device_unavailable");
         return;
     }
 
@@ -402,14 +313,16 @@ static void onMessage(
         Automation::applyManualCommand(
             target,
             value,
-            ControlSource::MQTT
+        ControlSource::MQTT,
+        expiresAt
         );
 
-    publishAck(
-        id,
-        result,
-        result.ok ? nullptr : "control failed"
-    );
+    const char* error = nullptr;
+    if (!result.ok) {
+        error = !validCommandDeadline(epochMillis(), expiresAt)
+            ? "command_expired" : "control_failed";
+    }
+    finish(result, error);
 }
 
 // 6. Reconnect MQTT broker
@@ -422,7 +335,10 @@ static bool reconnect() {
         MQTT_PORT
     );
 
-    if (!mqttClient.connect(DEVICE_ID)) {
+    const bool connected = MQTT_USERNAME[0]
+        ? mqttClient.connect(DEVICE_ID, MQTT_USERNAME, MQTT_PASSWORD)
+        : mqttClient.connect(DEVICE_ID);
+    if (!connected) {
 
         Serial.printf(
             "[MQTT] Connect failed: %d\n",
@@ -434,7 +350,7 @@ static bool reconnect() {
 
     if (!mqttClient.subscribe(
             MQTT_TOPIC_COMMAND,
-            0
+            1
         )) {
 
         Serial.println("[MQTT] Subscribe send failed");
@@ -529,7 +445,7 @@ bool ClassroomMQTT::publishTelemetry() {
 
     doc["deviceId"] = DEVICE_ID;
 
-    doc["ts"] = data.sensors.sampledAtMs;
+    doc["ts"] = nullptr;
 
     // Temperature and humidity
 
@@ -582,15 +498,6 @@ bool ClassroomMQTT::publishTelemetry() {
         doc["lamp"] = nullptr;
     }
 
-    // Fan state
-
-    if (data.actuators.fanKnown) {
-        doc["fan"] = data.actuators.fan;
-    }
-    else {
-        doc["fan"] = nullptr;
-    }
-
     // Door state
 
     if (data.actuators.doorKnown) {
@@ -603,24 +510,8 @@ bool ClassroomMQTT::publishTelemetry() {
     doc["fwVersion"] = FW_VERSION;
     doc["mockMode"] = MOCK_MODE;
 
-    // Extended telemetry schema
-
-    if (MQTT_EXTENDED_SCHEMA) {
-
-        doc["lampAuto"] =
-            data.actuators.lampAuto;
-
-        doc["fanAuto"] =
-            data.actuators.fanAuto;
-
-        doc["doorAuto"] =
-            data.actuators.doorAuto;
-
-        doc["nearDoorCount"] =
-            data.sensors.nearDoorCount;
-
-        doc["lastNearDoorAtMs"] =
-            data.sensors.lastNearDoorAtMs;
+    if (HAS_SERVO && HAS_ULTRASONIC) {
+        doc["doorAuto"] = data.actuators.doorAuto;
     }
 
     return publishJson(
@@ -702,14 +593,15 @@ void ClassroomMQTT::update() {
     now = millis();
 
     if (
-        now - lastTelemetryMs >= MQTT_INTERVAL_MS &&
+        (reportAfterCommand || now - lastTelemetryMs >= MQTT_INTERVAL_MS) &&
         !FirmwareOTA::isUpdating()
     ) {
 
         lastTelemetryMs = now;
 
-        if (!publishTelemetry()) {
-
+        if (publishTelemetry()) {
+            reportAfterCommand = false;
+        } else {
             Serial.println(
                 "[MQTT] Telemetry publish failed"
             );

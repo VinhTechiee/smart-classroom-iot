@@ -5,6 +5,7 @@
 #include "actuators.h"
 #include "ota.h"
 #include "control_logic.h"
+#include "command_deadline.h"
 
 #include <Arduino.h>
 #include <freertos/FreeRTOS.h>
@@ -43,21 +44,6 @@ static ControlResult applyOutput(
 
             result.actualState = actuators.lamp;
             result.stateKnown = actuators.lampKnown;
-
-            break;
-
-        case ControlTarget::Fan:
-
-            result.ok = Actuators::setFan(state);
-
-            if (result.ok == true) {
-                actuators.fan = state;
-            }
-
-            actuators.fanKnown = result.ok;
-
-            result.actualState = actuators.fan;
-            result.stateKnown = actuators.fanKnown;
 
             break;
 
@@ -104,7 +90,6 @@ bool Automation::begin() {
     ActuatorData actuators;
 
     bool lampOK = true;
-    bool fanOK = true;
     bool doorOK = true;
 
     if (HAS_EXTERNAL_LAMP || HAS_ONBOARD_LED) {
@@ -112,15 +97,6 @@ bool Automation::begin() {
         lampOK = applyOutput(
             actuators,
             ControlTarget::Lamp,
-            false
-        ).ok;
-    }
-
-    if (HAS_FAN) {
-
-        fanOK = applyOutput(
-            actuators,
-            ControlTarget::Fan,
             false
         ).ok;
     }
@@ -134,16 +110,12 @@ bool Automation::begin() {
         ).ok;
     }
 
-    actuators.lampAuto =
-        (HAS_EXTERNAL_LAMP || HAS_ONBOARD_LED) &&
-        HAS_PIR &&
-        HAS_LIGHT_SENSOR;
-
-    actuators.fanAuto = HAS_FAN && HAS_DHT20;
+    actuators.lampAuto = LAMP_LOCAL_AVAILABLE;
+    actuators.doorAuto = DOOR_AUTO_AT_BOOT && doorOK && HAS_SERVO && HAS_ULTRASONIC;
 
     SystemData::updateActuators(actuators);
 
-    return lampOK && fanOK && doorOK;
+    return lampOK && doorOK;
 }
 
 // 3. Automatic control
@@ -211,26 +183,9 @@ void Automation::update() {
     actuators.lampAuto == true
 ) {
 
-        bool desiredLamp = actuators.lamp;
-
-        if (recentMotion == false) {
-
-            desiredLamp = false;
-        }
-        else if (
-            data.sensors.lightValid == true &&
-            data.sensors.light <= LIGHT_DARK_THRESHOLD
-        ) {
-
-            desiredLamp = true;
-        }
-        else if (
-            data.sensors.lightValid == true &&
-            data.sensors.light >= LIGHT_BRIGHT_THRESHOLD
-        ) {
-
-            desiredLamp = false;
-        }
+        const bool desiredLamp = desiredLampState(actuators.lamp, recentMotion,
+            data.sensors.lightValid, data.sensors.light, LIGHT_POLARITY, LIGHT_ADC_MAX,
+            LIGHT_DARK_THRESHOLD, LIGHT_BRIGHT_THRESHOLD);
 
         if (
             desiredLamp != actuators.lamp ||
@@ -241,40 +196,6 @@ void Automation::update() {
                 actuators,
                 ControlTarget::Lamp,
                 desiredLamp
-            );
-        }
-    }
-
-    // 3.4. Automatic fan
-
-    if (
-    HAS_FAN &&
-    actuators.fanAuto == true &&
-    data.sensors.dhtValid == true
-) {
-
-        bool desiredFan = actuators.fan;
-
-        if (data.sensors.temperature >= TEMP_FAN_ON) {
-
-            desiredFan = true;
-        }
-        else if (
-            data.sensors.temperature <= TEMP_FAN_OFF
-        ) {
-
-            desiredFan = false;
-        }
-
-        if (
-            desiredFan != actuators.fan ||
-            actuators.fanKnown == false
-        ) {
-
-            applyOutput(
-                actuators,
-                ControlTarget::Fan,
-                desiredFan
             );
         }
     }
@@ -330,10 +251,9 @@ Actuators::updateWarningLED(data);
 ControlResult Automation::applyManualCommand(
     ControlTarget target,
     bool state,
-    ControlSource source
+    ControlSource source,
+    uint64_t expiresAt
 ) {
-    (void)source;
-
     ControlResult result;
 
     if (automationMutex == nullptr) {
@@ -358,9 +278,11 @@ ControlResult Automation::applyManualCommand(
     }
 
     ClassroomData data = SystemData::getSnapshot();
-
+    if (source == ControlSource::MQTT && !validCommandDeadline(epochMillis(), expiresAt)) {
+        xSemaphoreGive(automationMutex);
+        return result;
+    }
     ActuatorData& actuators = data.actuators;
-
     result = applyOutput(
         actuators,
         target,
@@ -374,12 +296,6 @@ ControlResult Automation::applyManualCommand(
             case ControlTarget::Lamp:
 
                 actuators.lampAuto = false;
-
-                break;
-
-            case ControlTarget::Fan:
-
-                actuators.fanAuto = false;
 
                 break;
 
@@ -407,7 +323,8 @@ ControlResult Automation::applyManualCommand(
 
 bool Automation::setAutomatic(
     ControlTarget target,
-    bool enabled
+    bool enabled,
+    uint64_t expiresAt
 ) {
     if (automationMutex == nullptr) {
         return false;
@@ -421,7 +338,7 @@ bool Automation::setAutomatic(
         return false;
     }
 
-    if (FirmwareOTA::isUpdating()) {
+    if (FirmwareOTA::isUpdating() || (expiresAt && !validCommandDeadline(epochMillis(), expiresAt))) {
         xSemaphoreGive(automationMutex);
         return false;
     }
@@ -438,26 +355,13 @@ switch (target) {
     case ControlTarget::Lamp:
 
         if (!(HAS_EXTERNAL_LAMP || HAS_ONBOARD_LED) ||
-            (enabled && (!HAS_PIR || !HAS_LIGHT_SENSOR))) {
+            (enabled && (!LAMP_LOCAL_AVAILABLE))) {
 
             ok = false;
             break;
         }
 
         actuators.lampAuto = enabled;
-
-        break;
-
-    case ControlTarget::Fan:
-
-        if (!HAS_FAN ||
-            (enabled && !HAS_DHT20)) {
-
-            ok = false;
-            break;
-        }
-
-        actuators.fanAuto = enabled;
 
         break;
 
@@ -538,26 +442,6 @@ void Automation::handleIR(uint64_t code) {
 
         setAutomatic(ControlTarget::Lamp, true);
     }
-    else if (code == IR_BTN_FAN_ON) {
-
-        applyManualCommand(
-            ControlTarget::Fan,
-            true,
-            ControlSource::IR
-        );
-    }
-    else if (code == IR_BTN_FAN_OFF) {
-
-        applyManualCommand(
-            ControlTarget::Fan,
-            false,
-            ControlSource::IR
-        );
-    }
-    else if (code == IR_BTN_FAN_AUTO) {
-
-        setAutomatic(ControlTarget::Fan, true);
-    }
     else if (code == IR_BTN_DOOR_OPEN) {
 
         applyManualCommand(
@@ -585,14 +469,14 @@ void Automation::handleIR(uint64_t code) {
 
 // 7. Wait for actuator commands before OTA
 
-void Automation::waitForIdle() {
-    if (
-        automationMutex &&
-        xSemaphoreTake(
-            automationMutex,
-            portMAX_DELAY
-        ) == pdTRUE
-    ) {
-        xSemaphoreGive(automationMutex);
+bool Automation::prepareForUpdate() {
+    if (!automationMutex || xSemaphoreTake(automationMutex, portMAX_DELAY) != pdTRUE) {
+        return false;
     }
+    ActuatorData actuators = SystemData::getSnapshot().actuators;
+    bool lampSafe = !(HAS_EXTERNAL_LAMP || HAS_ONBOARD_LED) ||
+        applyOutput(actuators, ControlTarget::Lamp, false).ok;
+    SystemData::updateActuators(actuators);
+    xSemaphoreGive(automationMutex);
+    return lampSafe;
 }

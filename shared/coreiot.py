@@ -10,8 +10,9 @@ from uuid import uuid4
 TELEMETRY_TOPIC = "v1/devices/me/telemetry"
 RPC_REQUEST_PREFIX = "v1/devices/me/rpc/request/"
 RPC_RESPONSE_PREFIX = "v1/devices/me/rpc/response/"
-ACTUATORS = {"setLamp": "lamp", "setFan": "fan", "setDoor": "door"}
+ACTUATORS = {"setLamp": "lamp", "setDoor": "door"}
 SENSOR_FIELDS = ("temperature", "humidity", "light", "distance")
+SENSOR_RANGES = {"temperature": (-40, 85), "humidity": (0, 100), "light": (0, 4095), "distance": (2, 400)}
 STATE_FIELDS = ("motion", *ACTUATORS.values())
 MINIMAL_SENSOR_FIELDS = ("humidity", "temperature")
 MINIMAL_STATE_FIELDS = ("lamp",)
@@ -30,6 +31,7 @@ class PendingRequest:
     request_id: str
     command_id: str
     deadline: float
+    requested_state: bool
 
 
 def failure(command_id: str, error: str) -> dict:
@@ -77,16 +79,17 @@ def cloud_telemetry(
     state_fields = MINIMAL_STATE_FIELDS if minimal else STATE_FIELDS
     for key in sensor_fields:
         value = sample.get(key)
-        if minimal and value is None:
+        if value is None:
             continue
         if not finite_number(value):
             raise ValueError(f"Telemetry {key} must be a finite number")
-        if minimal and key == "humidity" and not 0 <= value <= 100:
-            raise ValueError("Telemetry humidity must be between 0 and 100 percent RH")
+        low, high = SENSOR_RANGES[key]
+        if not low <= value <= high or (key == "light" and type(value) is not int):
+            raise ValueError(f"Telemetry {key} is outside the supported measurement range or format")
         values[key] = value
     for key in state_fields:
         value = sample.get(key)
-        if minimal and value is None:
+        if value is None:
             continue
         if type(value) is not bool:
             raise ValueError(f"Telemetry {key} must be a boolean")
@@ -100,6 +103,19 @@ def cloud_telemetry(
     if timestamp is not None:
         values["ts"] = timestamp
     return Publication(TELEMETRY_TOPIC, {"ts": received_ms if timestamp is None else timestamp, "values": values})
+
+
+def production_telemetry(topic: str, sample: dict, device_id: str, received_ms: int, *, minimal: bool) -> Publication:
+    if device_id in ("classroom-01", "classroom-ota-board") and sample.get("mockMode") is not False:
+        raise ValueError("Physical device reports must identify genuine acquisition")
+    timestamp = sample.get("ts")
+    if valid_timestamp(timestamp) and not fresh_telemetry(timestamp, received_ms):
+        raise ValueError("Telemetry timestamp is stale or too far in the future")
+    return cloud_telemetry(topic, sample, device_id, received_ms, minimal=minimal)
+
+
+def fresh_telemetry(timestamp: int, now_ms: int) -> bool:
+    return -5000 <= now_ms - timestamp <= 30000
 
 
 def valid_ack(body: dict) -> bool:
@@ -179,7 +195,7 @@ class RpcBridge:
         if self.pending_count >= self.max_pending:
             return self._finish(request_id, failure(command_id, "gateway_busy"))
 
-        self._pending[request_id] = PendingRequest(request_id, command_id, now + self.timeout)
+        self._pending[request_id] = PendingRequest(request_id, command_id, now + self.timeout, value)
         self._command_ids[command_id] = request_id
         return Publication(self.command_topic, {"id": command_id, "method": method, "value": value, "source": "coreiot"})
 
@@ -189,6 +205,8 @@ class RpcBridge:
         request_id = self._command_ids.get(body["id"])
         if request_id is None or now >= self._pending[request_id].deadline:
             return None
+        if body["ok"] and body["actualState"] is not self._pending[request_id].requested_state:
+            body = {**body, "ok": False, "error": "unexpected_state"}
         return self._finish(request_id, body)
 
     def expire(self, now: float) -> list[Publication]:
@@ -199,8 +217,11 @@ class RpcBridge:
         ]
 
     def reject_command(self, command_id: str, error: str) -> Publication:
-        """Complete a pending request when the synthetic local transport rejects its command."""
+        """Complete a pending request when the local transport rejects its command."""
         return self._finish(self._command_ids[command_id], failure(command_id, error))
+
+    def reject_pending(self, error: str) -> list[Publication]:
+        return [self.reject_command(command_id, error) for command_id in tuple(self._command_ids)]
 
     def _finish(self, request_id: str, body: dict) -> Publication:
         pending = self._pending.pop(request_id, None)

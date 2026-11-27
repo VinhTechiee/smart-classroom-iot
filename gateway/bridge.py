@@ -12,19 +12,28 @@ from uuid import uuid4
 
 import paho.mqtt.client as mqtt
 
-from coreiot.simulator.__main__ import parse_connection, read_environment
-from coreiot.simulator.gateway import (
+from shared.cloud_config import parse_connection, read_environment
+from shared.coreiot import (
     ACTUATORS,
     MAX_MQTT_PAYLOAD_BYTES,
     RPC_REQUEST_PREFIX,
     Publication,
     RpcBridge,
-    cloud_telemetry,
+    fresh_telemetry,
     json_object,
+    production_telemetry,
 )
 
 
 LOGGER = logging.getLogger(__name__)
+ACK_TIMEOUT = 3.5
+
+
+def with_command_deadline(publication: Publication) -> Publication:
+    return Publication(publication.topic, {
+        **publication.body,
+        "expiresAt": time_ns() // 1_000_000 + int(ACK_TIMEOUT * 1000),
+    })
 
 
 @dataclass(frozen=True)
@@ -156,13 +165,16 @@ class MqttLink:
 
 
 class ClassroomGateway:
-    def __init__(self, device_id: str, local: BrokerSettings, cloud: BrokerSettings, *, minimal: bool = True):
-        self.rpc = RpcBridge(device_id, timeout=3.5)
+    def __init__(self, device_id: str, local: BrokerSettings, cloud: BrokerSettings, *, minimal: bool = False):
+        self.rpc = RpcBridge(device_id, timeout=ACK_TIMEOUT)
         self.telemetry_topic = f"classroom/{device_id}/telemetry"
         self.minimal = minimal
         self.methods = ("setLamp",) if minimal else tuple(ACTUATORS)
         self.pending_telemetry = None
-        self.local = MqttLink("Local MQTT", local, (self.telemetry_topic, self.rpc.ack_topic), self.on_local_message)
+        self.local = MqttLink(
+            "Local MQTT", local, (self.telemetry_topic, self.rpc.ack_topic),
+            self.on_local_message, self.on_local_close,
+        )
         self.cloud = MqttLink("CoreIOT", cloud, (RPC_REQUEST_PREFIX + "+",), self.on_rpc, self.rpc.clear_session)
 
     def on_local_message(self, message: mqtt.MQTTMessage):
@@ -171,7 +183,7 @@ class ClassroomGateway:
         try:
             body = json_object(message.payload)
             if message.topic == self.telemetry_topic:
-                self.pending_telemetry = cloud_telemetry(
+                self.pending_telemetry = production_telemetry(
                     message.topic, body, self.rpc.device_id, time_ns() // 1_000_000, minimal=self.minimal,
                 )
             elif self.cloud.ready:
@@ -189,10 +201,15 @@ class ClassroomGateway:
             return
         if command.topic != self.rpc.command_topic:
             self.reply(command)
-        elif self.local.publish(command):
+        elif self.local.publish(with_command_deadline(command)):
             LOGGER.info("RPC %s -> %s (%s)", message.topic, command.body["method"], command.body["id"])
         else:
             self.reply(self.rpc.reject_command(command.body["id"], "local_broker_unavailable"))
+
+    def on_local_close(self):
+        self.pending_telemetry = None
+        for response in self.rpc.reject_pending("local_broker_unavailable"):
+            self.reply(response)
 
     def reply(self, response: Publication):
         if self.cloud.publish(response):
@@ -205,9 +222,13 @@ class ClassroomGateway:
                 self.local.pump()
                 for response in self.rpc.expire(monotonic()):
                     self.reply(response)
-                if self.pending_telemetry is not None and self.cloud.publish(self.pending_telemetry):
-                    LOGGER.info("Telemetry %s", json.dumps(self.pending_telemetry.body))
-                    self.pending_telemetry = None
+                sample = self.pending_telemetry
+                if sample is not None:
+                    if not fresh_telemetry(sample.body["ts"], time_ns() // 1_000_000):
+                        self.pending_telemetry = None
+                    elif self.cloud.publish(sample):
+                        LOGGER.info("Telemetry %s", json.dumps(sample.body))
+                        self.pending_telemetry = None
                 sleep(0.01)
         finally:
             self.local.close()
@@ -217,18 +238,24 @@ class ClassroomGateway:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--env-file", type=Path, help="Load connection settings from this file")
-    parser.add_argument("--device-id", help="Override COREIOT_DEVICE_ID for the selected token")
-    parser.add_argument("--extended", action="store_true", help="Use the full kit telemetry and actuator profile")
+    parser.add_argument("--device-id", help="Override GATEWAY_COREIOT_DEVICE_ID for the selected token")
+    profile = parser.add_mutually_exclusive_group()
+    profile.add_argument("--minimal", action="store_true", help="Use the humidity and LED sandbox profile")
+    profile.add_argument("--extended", action="store_true", help="Use the expanded profile (default)")
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     try:
         values = read_environment(args.env_file)
         local = local_broker_settings(values)
-        host, port, token, use_tls, ca_file = parse_connection(values)
+        host, port, token, use_tls, ca_file = parse_connection(values, "GATEWAY_COREIOT_DEVICE_TOKEN")
+        if token == values.get("COREIOT_DEVICE_TOKEN"):
+            raise ValueError("The gateway and direct simulator must use distinct credentials")
         tls = ssl.create_default_context(cafile=ca_file) if use_tls else None
         cloud = BrokerSettings(host, port, username=token, tls=tls)
-        device_id = args.device_id or values.get("COREIOT_DEVICE_ID") or "classroom-01"
-        ClassroomGateway(device_id, local, cloud, minimal=not args.extended).run()
+        device_id = args.device_id or values.get("GATEWAY_COREIOT_DEVICE_ID") or "classroom-01"
+        if device_id == "classroom-ota-virtual":
+            raise ValueError("The virtual OTA device is reserved for HTTPS delivery verification")
+        ClassroomGateway(device_id, local, cloud, minimal=args.minimal).run()
     except (OSError, ValueError) as exc:
         parser.error(str(exc))
     except KeyboardInterrupt:

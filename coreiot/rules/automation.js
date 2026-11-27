@@ -47,14 +47,5 @@ if (typeof msg.motion === "boolean" && isNumber(msg.light) &&
     }
 }
 
-if (isNumber(msg.temperature) && isNumber(settings.fanOnAbove) &&
-    isNumber(settings.fanOffBelow) && settings.fanOffBelow < settings.fanOnAbove) {
-    if (msg.temperature > settings.fanOnAbove) {
-        requestChange("setFan", msg.fan, true);
-    } else if (msg.temperature < settings.fanOffBelow) {
-        requestChange("setFan", msg.fan, false);
-    }
-}
-
 // The downstream Script Filter discards this object when no command is due.
 return commands.length ? commands : noCommand;

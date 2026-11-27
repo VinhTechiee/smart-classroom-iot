@@ -6,7 +6,7 @@ import math
 from collections import deque
 from datetime import datetime, timezone
 
-from .gateway import ACTUATORS, Publication, RpcBridge, cloud_telemetry
+from shared.coreiot import ACTUATORS, Publication, RpcBridge, cloud_telemetry
 
 LOGGER = logging.getLogger("coreiot.simulator")
 LOGGER.addHandler(logging.NullHandler())
@@ -18,7 +18,6 @@ DEFAULT_READINGS = {
     "motion": True,
     "distance": 42.0,
     "lamp": False,
-    "fan": False,
     "door": False,
     "fwVersion": "1.0.0",
 }

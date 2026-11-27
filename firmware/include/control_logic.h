@@ -3,6 +3,17 @@
 
 #include <stdint.h>
 
+inline bool desiredLampState(bool current, bool occupied, bool lightValid, int rawLight,
+    int polarity, int adcMax, int dark, int bright) {
+    if (!polarity) return current;
+    if (!occupied) return false;
+    if (!lightValid) return current;
+    const int normalized = polarity > 0 ? rawLight : adcMax - rawLight;
+    if (normalized <= dark) return true;
+    if (normalized >= bright) return false;
+    return current;
+}
+
 struct DoorCloseTracker {
     bool farTracking = false;
     uint32_t farSince = 0;

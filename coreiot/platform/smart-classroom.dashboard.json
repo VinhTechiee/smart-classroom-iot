@@ -115,15 +115,6 @@
                   "postFuncBody": "if (value === true || value === \"true\") return \"On\";\nif (value === false || value === \"false\") return \"Off\";\nreturn \"Unknown\";"
                 },
                 {
-                  "name": "fan",
-                  "label": "Fan",
-                  "type": "timeseries",
-                  "color": "#526884",
-                  "settings": {},
-                  "usePostProcessing": true,
-                  "postFuncBody": "if (value === true || value === \"true\") return \"On\";\nif (value === false || value === \"false\") return \"Off\";\nreturn \"Unknown\";"
-                },
-                {
                   "name": "door",
                   "label": "Door",
                   "type": "timeseries",
@@ -226,88 +217,6 @@
               "isPrimary": true
             },
             "methodName": "setLamp",
-            "methodParams": "false"
-          }
-        }
-      },
-      "80ef0f9d-8edb-43d5-95f1-af0fbc809105": {
-        "id": "80ef0f9d-8edb-43d5-95f1-af0fbc809105",
-        "typeFullFqn": "system.control_widgets.rpcbutton",
-        "isSystemType": true,
-        "bundleAlias": "control_widgets",
-        "typeAlias": "rpcbutton",
-        "type": "rpc",
-        "row": 8,
-        "col": 8,
-        "sizeX": 4,
-        "sizeY": 2,
-        "config": {
-          "title": "Fan on",
-          "showTitle": false,
-          "backgroundColor": "#ffffff",
-          "color": "#26354a",
-          "padding": "0px",
-          "dropShadow": true,
-          "enableFullscreen": false,
-          "targetDevice": {
-            "type": "entity",
-            "entityAliasId": "80ef0f9d-8edb-43d5-95f1-af0fbc809100"
-          },
-          "targetDeviceAliasIds": [
-            "80ef0f9d-8edb-43d5-95f1-af0fbc809100"
-          ],
-          "settings": {
-            "requestTimeout": 10000,
-            "oneWayElseTwoWay": false,
-            "requestPersistent": false,
-            "showError": true,
-            "buttonText": "Fan on",
-            "styleButton": {
-              "isRaised": true,
-              "isPrimary": true
-            },
-            "methodName": "setFan",
-            "methodParams": "true"
-          }
-        }
-      },
-      "80ef0f9d-8edb-43d5-95f1-af0fbc809106": {
-        "id": "80ef0f9d-8edb-43d5-95f1-af0fbc809106",
-        "typeFullFqn": "system.control_widgets.rpcbutton",
-        "isSystemType": true,
-        "bundleAlias": "control_widgets",
-        "typeAlias": "rpcbutton",
-        "type": "rpc",
-        "row": 8,
-        "col": 12,
-        "sizeX": 4,
-        "sizeY": 2,
-        "config": {
-          "title": "Fan off",
-          "showTitle": false,
-          "backgroundColor": "#ffffff",
-          "color": "#26354a",
-          "padding": "0px",
-          "dropShadow": true,
-          "enableFullscreen": false,
-          "targetDevice": {
-            "type": "entity",
-            "entityAliasId": "80ef0f9d-8edb-43d5-95f1-af0fbc809100"
-          },
-          "targetDeviceAliasIds": [
-            "80ef0f9d-8edb-43d5-95f1-af0fbc809100"
-          ],
-          "settings": {
-            "requestTimeout": 10000,
-            "oneWayElseTwoWay": false,
-            "requestPersistent": false,
-            "showError": true,
-            "buttonText": "Fan off",
-            "styleButton": {
-              "isRaised": true,
-              "isPrimary": true
-            },
-            "methodName": "setFan",
             "methodParams": "false"
           }
         }
@@ -762,15 +671,6 @@
                   "postFuncBody": "if (value === true || value === \"true\") return \"On\";\nif (value === false || value === \"false\") return \"Off\";\nreturn \"Unknown\";"
                 },
                 {
-                  "name": "fan",
-                  "label": "Fan",
-                  "type": "timeseries",
-                  "color": "#526884",
-                  "settings": {},
-                  "usePostProcessing": true,
-                  "postFuncBody": "if (value === true || value === \"true\") return \"On\";\nif (value === false || value === \"false\") return \"Off\";\nreturn \"Unknown\";"
-                },
-                {
                   "name": "door",
                   "label": "Door",
                   "type": "timeseries",
@@ -822,18 +722,6 @@
               "80ef0f9d-8edb-43d5-95f1-af0fbc809104": {
                 "row": 8,
                 "col": 4,
-                "sizeX": 4,
-                "sizeY": 2
-              },
-              "80ef0f9d-8edb-43d5-95f1-af0fbc809105": {
-                "row": 8,
-                "col": 8,
-                "sizeX": 4,
-                "sizeY": 2
-              },
-              "80ef0f9d-8edb-43d5-95f1-af0fbc809106": {
-                "row": 8,
-                "col": 12,
                 "sizeX": 4,
                 "sizeY": 2
               },

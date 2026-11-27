@@ -45,7 +45,7 @@ The following setup is for a kit that supplies the original sensors and actuator
 | Requirement | Repository deliverable | Tenant or device evidence |
 | --- | --- | --- |
 | T11 | Device profile and dashboard templates, two-way controls, and telemetry history | Dashboard record and all three RPCs with matching ACK and fresh state |
-| T12 | Configurable lamp/fan RuleChain scripts with a sandbox override gate | RuleChain trace and RPC results, then approved manual override exercised with A and B |
+| T12 | Humidity-based LED RuleChain with a sandbox override gate | RuleChain trace and RPC results, then approved manual override exercised with A and B |
 | T13 | Temperature and sandbox door/proximity rules with notification setup | Alarm lifecycle and a notification received by the configured recipient |
 | T14 | OTA package handoff and recovery procedure | Package checksum, physical rebooted version, and regression checks |
 
