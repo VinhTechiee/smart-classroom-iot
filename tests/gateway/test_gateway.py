@@ -75,11 +75,11 @@ class GatewayLoopbackTests(unittest.TestCase):
         send_packet(connection, 0x40, remaining[:2])
         return topic.decode(), json.loads(remaining[2:])
 
-    def start_gateway(self):
+    def start_gateway(self, *options):
         local = self.broker()
         cloud = self.broker()
         self.launch(
-            ["-m", "gateway.bridge"], COREIOT_DEVICE_ID=DEVICE,
+            ["-m", "gateway.bridge", *options], COREIOT_DEVICE_ID=DEVICE,
             COREIOT_MQTT_URL=f"mqtt://127.0.0.1:{cloud.getsockname()[1]}", COREIOT_DEVICE_TOKEN="gateway-test-token",
             COREIOT_MQTT_CA_FILE="", GATEWAY_MQTT_HOST="127.0.0.1", GATEWAY_MQTT_PORT=str(local.getsockname()[1]),
             GATEWAY_MQTT_USERNAME="", GATEWAY_MQTT_PASSWORD="",
@@ -126,6 +126,32 @@ class GatewayLoopbackTests(unittest.TestCase):
         topic, timeout = self.receive(cloud)
         self.assertEqual(topic, RPC_RESPONSE + "missing")
         self.assertEqual((timeout["id"], timeout["error"]), (command["id"], "device_timeout"))
+
+    def test_gateway_publishes_ai_event_after_six_fresh_samples(self):
+        local, cloud, _, _ = self.start_gateway("--ai-model", "ai/humidity_model.json")
+        sample = {"deviceId": DEVICE, "lamp": False, "fwVersion": "1.0.0"}
+        start_ms = time_ns() // 1_000_000
+
+        def forward(humidity, offset_ms):
+            self.publish(local, LOCAL + "telemetry", {**sample, "humidity": humidity, "ts": start_ms + offset_ms})
+            topic, telemetry = self.receive(cloud)
+            self.assertEqual(topic, CLOUD_TELEMETRY)
+            return telemetry["values"]
+
+        self.assertNotIn("aiEvent", forward(70, 0))
+        self.assertNotIn("aiEvent", forward(70, 5_000))
+        # A long interruption resets the window. A near-duplicate is still forwarded as telemetry.
+        self.assertNotIn("aiEvent", forward(48, 25_000))
+        self.assertNotIn("aiEvent", forward(48, 25_100))
+        for index, humidity in enumerate((51, 54, 57, 60), start=1):
+            self.assertNotIn("aiEvent", forward(humidity, 25_000 + index * 5_000))
+        values = forward(63, 50_000)
+        self.assertEqual(values["aiEvent"], "humidity_rising")
+        self.assertEqual(values["aiModel"], "humidity-centroid-v1")
+        self.assertEqual(values["humidity"], 63)
+
+        self.assertNotIn("aiEvent", forward(None, 55_000))
+        self.assertNotIn("aiEvent", forward(64, 60_000))
 
     def test_cloud_reconnect_drops_previous_session_mappings(self):
         local, cloud, listener, client_id = self.start_gateway()

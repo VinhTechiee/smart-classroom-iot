@@ -12,6 +12,7 @@ from uuid import uuid4
 
 import paho.mqtt.client as mqtt
 
+from ai.humidity import MODEL_VERSION, HumidityDetector, HumidityModel
 from coreiot.simulator.__main__ import parse_connection, read_environment
 from coreiot.simulator.gateway import (
     ACTUATORS,
@@ -156,10 +157,14 @@ class MqttLink:
 
 
 class ClassroomGateway:
-    def __init__(self, device_id: str, local: BrokerSettings, cloud: BrokerSettings, *, minimal: bool = True):
+    def __init__(
+        self, device_id: str, local: BrokerSettings, cloud: BrokerSettings, *,
+        minimal: bool = True, detector: HumidityDetector | None = None,
+    ):
         self.rpc = RpcBridge(device_id, timeout=3.5)
         self.telemetry_topic = f"classroom/{device_id}/telemetry"
         self.minimal = minimal
+        self.detector = detector
         self.methods = ("setLamp",) if minimal else tuple(ACTUATORS)
         self.pending_telemetry = None
         self.local = MqttLink("Local MQTT", local, (self.telemetry_topic, self.rpc.ack_topic), self.on_local_message)
@@ -171,9 +176,15 @@ class ClassroomGateway:
         try:
             body = json_object(message.payload)
             if message.topic == self.telemetry_topic:
-                self.pending_telemetry = cloud_telemetry(
+                sample = cloud_telemetry(
                     message.topic, body, self.rpc.device_id, time_ns() // 1_000_000, minimal=self.minimal,
                 )
+                if self.detector is not None:
+                    values = sample.body["values"]
+                    label = self.detector.observe(values.get("humidity"), sample.body["ts"])
+                    if label is not None:
+                        values.update(aiEvent=label, aiModel=MODEL_VERSION)
+                self.pending_telemetry = sample
             elif self.cloud.ready:
                 response = self.rpc.accept_ack(message.topic, body, monotonic())
                 if response is not None:
@@ -219,6 +230,7 @@ def main() -> int:
     parser.add_argument("--env-file", type=Path, help="Load connection settings from this file")
     parser.add_argument("--device-id", help="Override COREIOT_DEVICE_ID for the selected token")
     parser.add_argument("--extended", action="store_true", help="Use the full kit telemetry and actuator profile")
+    parser.add_argument("--ai-model", type=Path, help="Enable humidity-event inference using this trained model")
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     try:
@@ -228,7 +240,8 @@ def main() -> int:
         tls = ssl.create_default_context(cafile=ca_file) if use_tls else None
         cloud = BrokerSettings(host, port, username=token, tls=tls)
         device_id = args.device_id or values.get("COREIOT_DEVICE_ID") or "classroom-01"
-        ClassroomGateway(device_id, local, cloud, minimal=not args.extended).run()
+        detector = HumidityDetector(HumidityModel.load(args.ai_model)) if args.ai_model else None
+        ClassroomGateway(device_id, local, cloud, minimal=not args.extended, detector=detector).run()
     except (OSError, ValueError) as exc:
         parser.error(str(exc))
     except KeyboardInterrupt:

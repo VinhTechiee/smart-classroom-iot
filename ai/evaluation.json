@@ -1,0 +1,72 @@
+{
+  "source": "synthetic",
+  "seed": 261,
+  "train_sessions": 128,
+  "test_sessions": 32,
+  "train_windows": 512,
+  "test_windows": 128,
+  "labels": [
+    "stable",
+    "humidity_rising",
+    "humidity_falling",
+    "humidity_fluctuating"
+  ],
+  "confusion_matrix_actual_rows_predicted_columns": [
+    [
+      32,
+      0,
+      0,
+      0
+    ],
+    [
+      4,
+      28,
+      0,
+      0
+    ],
+    [
+      1,
+      0,
+      31,
+      0
+    ],
+    [
+      0,
+      6,
+      8,
+      18
+    ]
+  ],
+  "accuracy": 0.8515625,
+  "macro_f1": 0.8423151292471562,
+  "per_class": {
+    "stable": {
+      "precision": 0.8648648648648649,
+      "recall": 1.0,
+      "f1": 0.927536231884058,
+      "support": 32
+    },
+    "humidity_rising": {
+      "precision": 0.8235294117647058,
+      "recall": 0.875,
+      "f1": 0.8484848484848485,
+      "support": 32
+    },
+    "humidity_falling": {
+      "precision": 0.7948717948717948,
+      "recall": 0.96875,
+      "f1": 0.8732394366197183,
+      "support": 32
+    },
+    "humidity_fluctuating": {
+      "precision": 1.0,
+      "recall": 0.5625,
+      "f1": 0.72,
+      "support": 32
+    }
+  },
+  "inference_time_us": {
+    "mean": 10.9921875,
+    "p95": 16.6
+  }
+}

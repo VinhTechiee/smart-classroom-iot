@@ -52,6 +52,14 @@ python -m gateway.bridge --env-file gateway/.env
 
 In CoreIOT, confirm that the dashboard for `classroom-01-sim` shows 65% RH. Press **LED ON** and **LED OFF**. Compare the cloud request ID, the gateway's local command ID, the ACK Boolean, and fresh `lamp` telemetry. To exercise the local ACK timeout, restart the simulator with `--drop-ack`. The gateway reports `device_timeout` after about 3.5 seconds, and the device can still report an updated `lamp` if the command was applied.
 
+For changing readings, stop the fixed simulator and start it in random mode. Each publication includes random humidity from 0 to 100% RH and temperature from 20 to 40 °C, including in minimal mode. The default interval is 5 seconds.
+
+```powershell
+python gateway/simulator.py --minimal --device-id classroom-01-sim --random
+```
+
+Add `--ai-model ai/humidity_model.json` to the bridge command to publish the humidity classification as `aiEvent` and `aiModel`. See [T09 training and demo](../ai/README.md) for the model, metrics and expected classes.
+
 Run one gateway process per configured classroom and token. For the physical classroom, configure `classroom-01` and its own token. The firmware must publish and subscribe to `classroom/classroom-01/{telemetry,cmd,ack}` and identify itself as `classroom-01`. Use Unix milliseconds for a synchronized device or `ts:null` for an unsynchronized device. For the original full kit profile, omit `--minimal` on the simulator and use `--extended` on the bridge.
 
 ## Verification
