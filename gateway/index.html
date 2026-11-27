@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Phòng học IoT</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #14263b;
+      --muted: #485c71;
+      --line: #d7e2eb;
+      --surface: #fff;
+      --accent: #086c62;
+      --accent-bg: #e7f6f1;
+      --warning: #80530e;
+      --warning-bg: #fff2d9;
+      font-family: system-ui, sans-serif;
+      color: var(--ink);
+      background: #edf3f8;
+    }
+
+    * { box-sizing: border-box; }
+    body { margin: 0; }
+    main { max-width: 68rem; margin: 0 auto; padding: clamp(1rem, 5vw, 4rem); }
+    h1, h2, p { margin: 0; }
+    h1 { font-size: clamp(2.2rem, 5vw, 3.35rem); line-height: 1.06; letter-spacing: -.045em; }
+    h2 { font-size: 1rem; font-weight: 650; }
+
+    .overview {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 1rem;
+      padding-bottom: 1.5rem;
+      border-bottom: 1px solid var(--line);
+    }
+
+    #device { color: var(--muted); margin-top: .7rem; overflow-wrap: anywhere; }
+    #connection {
+      padding: .45rem .75rem;
+      border-radius: .5rem;
+      color: var(--warning);
+      background: var(--warning-bg);
+      font-size: .925rem;
+      font-weight: 600;
+    }
+    #connection[data-live="true"] { color: var(--accent); background: var(--accent-bg); }
+
+    .dashboard {
+      display: grid;
+      grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr);
+      gap: 1.25rem;
+      margin: 1.5rem 0 1rem;
+    }
+
+    .panel { padding: clamp(1rem, 3vw, 1.5rem); border: 1px solid var(--line); border-radius: 1rem; background: var(--surface); }
+    .measurements { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+    .measure + .measure { border-left: 1px solid var(--line); padding-left: 1rem; }
+    .value { display: flex; align-items: baseline; flex-wrap: wrap; gap: .35rem; margin-top: 1.25rem; }
+    .value output { color: var(--ink); font-size: clamp(2.1rem, 4.8vw, 3.25rem); font-weight: 680; letter-spacing: -.05em; line-height: 1; }
+    .value span { color: var(--muted); font-weight: 600; }
+    .led-status { margin-top: .75rem; font-size: 1.45rem; font-weight: 680; }
+    #lamp[data-on="true"] { color: var(--accent); }
+    .controls { display: flex; flex-wrap: wrap; gap: .6rem; margin-top: 1.1rem; }
+    button {
+      border: 1px solid var(--accent);
+      border-radius: .5rem;
+      padding: .6rem .9rem;
+      min-height: 2.75rem;
+      background: var(--accent);
+      color: #fff;
+      font: inherit;
+      font-weight: 640;
+      cursor: pointer;
+    }
+    button.secondary { background: var(--surface); color: var(--accent); }
+    button:hover:not(:disabled) { filter: brightness(.9); }
+    button:focus-visible { outline: 3px solid #2072ad; outline-offset: 3px; }
+    button:disabled { opacity: .55; cursor: default; }
+    #command-status { margin-top: .75rem; min-height: 1.4rem; }
+    #command-status[data-error="true"] { color: #9b3125; }
+    #command-status, .last-report { color: var(--muted); font-size: .925rem; }
+    .last-report time { color: var(--ink); font-variant-numeric: tabular-nums; }
+
+    @media (max-width: 46rem) { .dashboard { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <main>
+    <header class="overview">
+      <div>
+        <h1>Phòng học IoT</h1>
+        <p id="device">Thiết bị đang được tải</p>
+      </div>
+      <p id="connection" role="status">Đang kết nối</p>
+    </header>
+
+    <div class="dashboard">
+      <section class="panel measurements" aria-label="Số đo cảm biến">
+        <div class="measure">
+          <h2>Độ ẩm</h2>
+          <p class="value"><output id="humidity">—</output><span>% RH</span></p>
+        </div>
+        <div class="measure">
+          <h2>Nhiệt độ</h2>
+          <p class="value"><output id="temperature">—</output><span>°C</span></p>
+        </div>
+      </section>
+
+      <section class="panel" aria-labelledby="led-heading">
+        <h2 id="led-heading">Đèn LED trên bo</h2>
+        <p class="led-status"><output id="lamp">Chưa có trạng thái</output></p>
+        <div class="controls">
+          <button id="turn-on" type="button" disabled>Bật LED</button>
+          <button id="turn-off" class="secondary" type="button" disabled>Tắt LED</button>
+        </div>
+        <p id="command-status" role="status"></p>
+      </section>
+    </div>
+
+    <p class="last-report">Lần nhận dữ liệu gần nhất <time id="received-at">—</time></p>
+  </main>
+
+  <script>
+    const humidity = document.querySelector("#humidity");
+    const temperature = document.querySelector("#temperature");
+    const lamp = document.querySelector("#lamp");
+    const device = document.querySelector("#device");
+    const connection = document.querySelector("#connection");
+    const receivedAt = document.querySelector("#received-at");
+    const commandStatus = document.querySelector("#command-status");
+    const turnOn = document.querySelector("#turn-on");
+    const turnOff = document.querySelector("#turn-off");
+    const STALE_AFTER_MS = 30_000;
+    let commandPending = false;
+    let canControl = false;
+    let polling = false;
+
+    function updateButtons() {
+      turnOn.disabled = commandPending || !canControl;
+      turnOff.disabled = turnOn.disabled;
+    }
+
+    function displayReading(value) {
+      return Number.isFinite(value) ? value.toLocaleString("vi-VN", { maximumFractionDigits: 1 }) : "—";
+    }
+
+    // Like Lab 4, one GET request refreshes the readings without reloading the page.
+    async function pollSensors() {
+      if (polling) return;
+      polling = true;
+      try {
+        const response = await fetch("/sensors", { cache: "no-store" });
+        if (!response.ok) throw new Error("Sensors unavailable");
+        const data = await response.json();
+        const hasReport = Number.isFinite(data.receivedAt);
+        const fresh = hasReport && Date.now() - data.receivedAt <= STALE_AFTER_MS;
+        const hasLamp = typeof data.lamp === "boolean";
+        device.textContent = data.deviceId;
+        humidity.textContent = displayReading(data.humidity);
+        temperature.textContent = displayReading(data.temperature);
+        lamp.textContent = hasLamp ? (data.lamp ? "Đang bật" : "Đang tắt") : "Chưa có trạng thái";
+        lamp.dataset.on = data.lamp === true;
+
+        if (hasReport) {
+          const date = new Date(data.receivedAt);
+          receivedAt.dateTime = date.toISOString();
+          receivedAt.textContent = date.toLocaleTimeString("vi-VN");
+        }
+
+        if (!data.brokerConnected) {
+          connection.textContent = "MQTT mất kết nối";
+        } else if (!hasReport) {
+          connection.textContent = "Đang chờ số đo";
+        } else {
+          connection.textContent = fresh ? "Đang nhận dữ liệu" : "Dữ liệu đã cũ";
+        }
+        connection.dataset.live = data.brokerConnected && fresh;
+        canControl = data.brokerConnected && fresh && hasLamp;
+      } catch {
+        connection.textContent = "Không kết nối được gateway";
+        connection.dataset.live = false;
+        canControl = false;
+      } finally {
+        polling = false;
+        updateButtons();
+      }
+    }
+
+    async function setLamp(value) {
+      commandPending = true;
+      commandStatus.dataset.error = false;
+      commandStatus.textContent = "Đang chờ thiết bị xác nhận…";
+      updateButtons();
+      try {
+        const response = await fetch("/led", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ value }),
+        });
+        const ack = await response.json();
+        if (response.ok && ack.ok) {
+          commandStatus.textContent = "Thiết bị đã xác nhận lệnh.";
+        } else {
+          commandStatus.dataset.error = true;
+          commandStatus.textContent = ack.error === "device_timeout"
+            ? "Hết thời gian chờ xác nhận từ thiết bị."
+            : "Không xác nhận được lệnh LED.";
+        }
+        await pollSensors();
+      } catch {
+        commandStatus.dataset.error = true;
+        commandStatus.textContent = "Không kết nối được gateway.";
+      } finally {
+        commandPending = false;
+        updateButtons();
+      }
+    }
+
+    turnOn.addEventListener("click", () => setLamp(true));
+    turnOff.addEventListener("click", () => setLamp(false));
+    pollSensors();
+    setInterval(pollSensors, 3000);
+  </script>
+</body>
+</html>
