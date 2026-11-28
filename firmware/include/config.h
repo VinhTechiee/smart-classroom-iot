@@ -20,7 +20,7 @@ constexpr unsigned long SERIAL_BAUD_RATE = 115200;
 
 // 1. SYSTEM CONFIGURATION
 
-constexpr bool MOCK_MODE = true;
+constexpr bool MOCK_MODE = false;
 constexpr bool MOCK_CYCLE = false;
 constexpr bool MOCK_SERIAL_LOG = true;
 constexpr bool MQTT_EXTENDED_SCHEMA = false;
