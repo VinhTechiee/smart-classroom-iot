@@ -22,23 +22,37 @@ static decode_results results;
 
 // 1. Initialize sensors
 
+
 bool Sensors::begin() {
     if (MOCK_MODE == true) {
         return true;
     }
-    else {
+
+    if (HAS_PIR) {
         pinMode(PIR_PIN, INPUT);
+    }
+
+    if (HAS_LIGHT_SENSOR) {
         pinMode(LIGHT_PIN, INPUT);
+        analogReadResolution(12);
+    }
+
+    if (HAS_ULTRASONIC) {
         pinMode(TRIG_PIN, OUTPUT);
         pinMode(ECHO_PIN, INPUT);
 
         digitalWrite(TRIG_PIN, LOW);
+    }
 
-        analogReadResolution(12);
-
+    if (HAS_IR) {
         irrecv.enableIRIn();
+    }
 
-        i2cReady = Wire.begin(I2C_SDA, I2C_SCL, 100000);
+    if (HAS_DHT20 || HAS_LCD) {
+
+        i2cReady = Wire.begin(
+            I2C_SDA, I2C_SCL, 100000
+        );
 
         if (!i2cReady) {
             Serial.println("[Sensors] WARNING: I2C init failed");
@@ -47,15 +61,19 @@ bool Sensors::begin() {
 
         delay(100);
 
-        dhtReady = dht20.begin();
+        if (HAS_DHT20) {
 
-        if (!dhtReady) {
-            Serial.println("[Sensors] WARNING: DHT20 not found at 0x38");
+            dhtReady = dht20.begin();
+
+            if (!dhtReady) {
+                Serial.println("[Sensors] WARNING: DHT20 not found");
+            }
         }
-
-        return true;
     }
+
+    return true;
 }
+
 
 // 2. Read temperature and humidity
 
@@ -64,6 +82,9 @@ bool Sensors::isI2CReady() {
 }
 
 bool Sensors::readDHT20(float& temperature, float& humidity) {
+    if (!HAS_DHT20) {
+        return false;
+    }
     if (MOCK_MODE == true) {
         temperature = 32.0f;
         humidity = 65.0f;
@@ -101,6 +122,13 @@ bool Sensors::readDHT20(float& temperature, float& humidity) {
 // 3. Read light sensor
 
 bool Sensors::readLight(int& light) {
+    
+
+    if (!HAS_LIGHT_SENSOR) {
+        return false;
+    }
+
+
     if (MOCK_MODE == true) {
         light = 850;
         return true;
@@ -114,6 +142,9 @@ bool Sensors::readLight(int& light) {
 // 4. Read motion sensor
 
 bool Sensors::readMotion(bool& motion) {
+    if (!HAS_PIR) {
+        return false;
+    }
     if (MOCK_MODE == true) {
         motion = true;
         return true;
@@ -127,6 +158,10 @@ bool Sensors::readMotion(bool& motion) {
 // 5. Read ultrasonic sensor
 
 bool Sensors::readDistance(float& distance) {
+    if (!HAS_ULTRASONIC) {
+        return false;
+    }
+
     if (MOCK_MODE == true) {
         distance = 10.0f;
         return true;
@@ -166,6 +201,9 @@ bool Sensors::readDistance(float& distance) {
 // 6. Read infrared remote
 
 bool Sensors::readIR(uint64_t& code) {
+    if (!HAS_IR) {
+        return false;
+    }
     if (MOCK_MODE == true) {
         return false;
     }
@@ -195,6 +233,7 @@ bool Sensors::readIR(uint64_t& code) {
 
 // 7. Read all sensors
 
+
 SensorData Sensors::read() {
     SensorData data;
 
@@ -204,9 +243,7 @@ SensorData Sensors::read() {
     );
 
     data.lightValid = readLight(data.light);
-
     data.motionValid = readMotion(data.motion);
-
     data.distanceValid = readDistance(data.distance);
 
     data.sampledAtMs = millis();
@@ -216,11 +253,22 @@ SensorData Sensors::read() {
 
         bool hot = (data.sampledAtMs / 40000UL) % 2 == 0;
 
-        data.temperature = hot ? 32.0f : 27.0f;
-        data.humidity = hot ? 65.0f : 55.0f;
-        data.light = hot ? 850 : 1300;
-        data.motion = hot;
-        data.distance = hot ? 10.0f : 40.0f;
+        if (data.dhtValid) {
+            data.temperature = hot ? 32.0f : 27.0f;
+            data.humidity = hot ? 65.0f : 55.0f;
+        }
+
+        if (data.lightValid) {
+            data.light = hot ? 850 : 1300;
+        }
+
+        if (data.motionValid) {
+            data.motion = hot;
+        }
+
+        if (data.distanceValid) {
+            data.distance = hot ? 10.0f : 40.0f;
+        }
     }
 
     // Near-door event tracking

@@ -85,6 +85,7 @@ static ControlResult applyOutput(
 
 // 2. Initialize automation
 
+
 bool Automation::begin() {
 
     if (automationMutex == nullptr) {
@@ -102,29 +103,47 @@ bool Automation::begin() {
 
     ActuatorData actuators;
 
-    ControlResult lampResult = applyOutput(
-        actuators,
-        ControlTarget::Lamp,
-        false
-    );
+    bool lampOK = true;
+    bool fanOK = true;
+    bool doorOK = true;
 
-    ControlResult fanResult = applyOutput(
-        actuators,
-        ControlTarget::Fan,
-        false
-    );
+    if (HAS_EXTERNAL_LAMP || HAS_ONBOARD_LED) {
 
-    ControlResult doorResult = applyOutput(
-        actuators,
-        ControlTarget::Door,
-        false
-    );
+        lampOK = applyOutput(
+            actuators,
+            ControlTarget::Lamp,
+            false
+        ).ok;
+    }
+
+    if (HAS_FAN) {
+
+        fanOK = applyOutput(
+            actuators,
+            ControlTarget::Fan,
+            false
+        ).ok;
+    }
+
+    if (HAS_SERVO) {
+
+        doorOK = applyOutput(
+            actuators,
+            ControlTarget::Door,
+            false
+        ).ok;
+    }
+
+    actuators.lampAuto =
+        (HAS_EXTERNAL_LAMP || HAS_ONBOARD_LED) &&
+        HAS_PIR &&
+        HAS_LIGHT_SENSOR;
+
+    actuators.fanAuto = HAS_FAN && HAS_DHT20;
 
     SystemData::updateActuators(actuators);
 
-    return lampResult.ok &&
-           fanResult.ok &&
-           doorResult.ok;
+    return lampOK && fanOK && doorOK;
 }
 
 // 3. Automatic control
@@ -185,7 +204,12 @@ void Automation::update() {
 
     // 3.3. Automatic lamp
 
-    if (actuators.lampAuto == true) {
+    if (
+    (HAS_EXTERNAL_LAMP || HAS_ONBOARD_LED) &&
+    HAS_PIR &&
+    HAS_LIGHT_SENSOR &&
+    actuators.lampAuto == true
+) {
 
         bool desiredLamp = actuators.lamp;
 
@@ -224,9 +248,10 @@ void Automation::update() {
     // 3.4. Automatic fan
 
     if (
-        actuators.fanAuto == true &&
-        data.sensors.dhtValid == true
-    ) {
+    HAS_FAN &&
+    actuators.fanAuto == true &&
+    data.sensors.dhtValid == true
+) {
 
         bool desiredFan = actuators.fan;
 
@@ -256,7 +281,11 @@ void Automation::update() {
 
     // 3.5. Automatic door
 
-    if (actuators.doorAuto == true) {
+    if (
+    HAS_SERVO &&
+    HAS_ULTRASONIC &&
+    actuators.doorAuto == true
+) {
 
         bool desiredDoor = doorTracker.desired(
             actuators.door,
@@ -283,7 +312,8 @@ void Automation::update() {
             );
         }
     }
-
+    // Update onboard warning LED
+Actuators::updateWarningLED(data);
     // 3.6. Save actuator states
 
     if (!actuators.doorAuto) {
@@ -400,36 +430,59 @@ bool Automation::setAutomatic(
 
     ActuatorData& actuators = data.actuators;
 
-    bool ok = true;
+    
+bool ok = true;
 
-    switch (target) {
+switch (target) {
 
-        case ControlTarget::Lamp:
+    case ControlTarget::Lamp:
 
-            actuators.lampAuto = enabled;
-
-            break;
-
-        case ControlTarget::Fan:
-
-            actuators.fanAuto = enabled;
-
-            break;
-
-        case ControlTarget::Door:
-
-            actuators.doorAuto = enabled;
-
-            doorTracker.reset();
-
-            break;
-
-        default:
+        if (!(HAS_EXTERNAL_LAMP || HAS_ONBOARD_LED) ||
+            (enabled && (!HAS_PIR || !HAS_LIGHT_SENSOR))) {
 
             ok = false;
-
             break;
-    }
+        }
+
+        actuators.lampAuto = enabled;
+
+        break;
+
+    case ControlTarget::Fan:
+
+        if (!HAS_FAN ||
+            (enabled && !HAS_DHT20)) {
+
+            ok = false;
+            break;
+        }
+
+        actuators.fanAuto = enabled;
+
+        break;
+
+    case ControlTarget::Door:
+
+        if (!HAS_SERVO ||
+            (enabled && !HAS_ULTRASONIC)) {
+
+            ok = false;
+            break;
+        }
+
+        actuators.doorAuto = enabled;
+
+        doorTracker.reset();
+
+        break;
+
+    default:
+
+        ok = false;
+
+        break;
+}
+
 
     if (ok == true) {
 

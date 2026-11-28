@@ -13,6 +13,10 @@ constexpr char WIFI_PASSWORD[] = "";
 constexpr char MQTT_HOST[] = "";
 constexpr char OTA_PASSWORD[] = "";
 #endif
+constexpr char FW_VERSION[] = "1.0.0";
+constexpr char DEVICE_ID[] = "classroom-node-01";
+
+constexpr unsigned long SERIAL_BAUD_RATE = 115200;
 
 // 1. SYSTEM CONFIGURATION
 
@@ -20,30 +24,93 @@ constexpr bool MOCK_MODE = true;
 constexpr bool MOCK_CYCLE = false;
 constexpr bool MOCK_SERIAL_LOG = true;
 constexpr bool MQTT_EXTENDED_SCHEMA = false;
+// HARDWARE CONFIGURATION
 
-constexpr char FW_VERSION[] = "1.0.0";
-constexpr char DEVICE_ID[] = "classroom-node-01";
+#if defined(SMART_CLASSROOM_YOLOBIT)
 
-constexpr unsigned long SERIAL_BAUD_RATE = 115200;
+constexpr bool HAS_DHT20 = true;
+constexpr bool HAS_ONBOARD_RGB = true;
+constexpr bool HAS_ONBOARD_LED = false;
+
+constexpr bool HAS_EXTERNAL_LAMP = false;
+constexpr bool HAS_LIGHT_SENSOR = true;
+constexpr bool HAS_PIR = false;
+constexpr bool HAS_ULTRASONIC = true;
+constexpr bool HAS_IR = false;
+
+constexpr bool HAS_FAN = false;
+constexpr bool HAS_SERVO = true;
+constexpr bool HAS_LCD = true;
+
+#else
+
+constexpr bool HAS_DHT20 = true;
+constexpr bool HAS_ONBOARD_RGB = true;
+constexpr bool HAS_ONBOARD_LED = true;
+
+constexpr bool HAS_EXTERNAL_LAMP = false;
+constexpr bool HAS_LIGHT_SENSOR = false;
+constexpr bool HAS_PIR = false;
+constexpr bool HAS_ULTRASONIC = false;
+constexpr bool HAS_IR = false;
+
+constexpr bool HAS_FAN = false;
+constexpr bool HAS_SERVO = false;
+constexpr bool HAS_LCD = false;
+
+#endif
 
 // 2. ONBOARD LED CONFIGURATION
+
+
+// 2. HARDWARE PIN CONFIGURATION
+
+#if defined(SMART_CLASSROOM_YOLOBIT)
+
+// Yolo:Bit onboard LED matrix
+
+constexpr int LED_PIN = -1;
+constexpr int NEO_PIN = 4;
+constexpr int LED_COUNT = 25;
+
+// I2C: P20 and P19
+
+constexpr int I2C_SDA = 21;
+constexpr int I2C_SCL = 22;
+
+// Sensors
+
+constexpr int LIGHT_PIN = 32; // P0
+constexpr int TRIG_PIN = 26;  // P10
+constexpr int ECHO_PIN = 18;  // P13
+
+// Reserved for future sensors
+constexpr int PIR_PIN = 27;   // P2
+constexpr int IR_PIN = 33;    // P1
+
+// Actuators
+
+constexpr int LAMP_PIN = 19;  // P14
+constexpr int SERVO_PIN = 15; // P4
+
+// Reserved for future fan driver
+constexpr int FAN_PIN = 13;
+constexpr int FAN_AUX_PIN = 5;
+
+#else
+
+// YoloUNO onboard LED
 
 constexpr int LED_PIN = 48;
 constexpr int NEO_PIN = 45;
 constexpr int LED_COUNT = 1;
 
-// 3. I2C CONFIGURATION
+// I2C
 
 constexpr int I2C_SDA = 11;
 constexpr int I2C_SCL = 12;
 
-constexpr int DHT20_ADDRESS = 0x38;
-
-constexpr int LCD_ADDRESS = 0x21;
-constexpr int LCD_COLS = 16;
-constexpr int LCD_ROWS = 2;
-
-// 4. SENSOR PIN CONFIGURATION
+// Sensors
 
 constexpr int LIGHT_PIN = 1;
 constexpr int PIR_PIN = 10;
@@ -53,15 +120,26 @@ constexpr int ECHO_PIN = 7;
 
 constexpr int IR_PIN = 4;
 
-// 5. ACTUATOR PIN CONFIGURATION
+// Actuators
 
 constexpr int LAMP_PIN = 18;
-constexpr int LAMP_LED_COUNT = 4;
-
 constexpr int FAN_PIN = 8;
 constexpr int FAN_AUX_PIN = 9;
 
 constexpr int SERVO_PIN = 5;
+
+#endif
+
+// Shared hardware configuration
+
+constexpr int DHT20_ADDRESS = 0x38;
+
+constexpr int LCD_ADDRESS = 0x21;
+constexpr int LCD_COLS = 16;
+constexpr int LCD_ROWS = 2;
+
+constexpr int LAMP_LED_COUNT = 4;
+
 
 constexpr int DOOR_CLOSED_ANGLE = 0;
 constexpr int DOOR_OPEN_ANGLE = 90;

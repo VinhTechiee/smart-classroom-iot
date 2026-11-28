@@ -121,7 +121,7 @@ static const char WEB_PAGE[] PROGMEM = R"HTML(
 
 <header>
     <h1>Smart Classroom</h1>
-    <p>ESP32-S3 YoloUNO Dashboard</p>
+    <p>ESP32 Smart Classroom Dashboard</p>
 </header>
 
 <main>
@@ -238,6 +238,7 @@ static const char WEB_PAGE[] PROGMEM = R"HTML(
 <script>
 
     let busy = false;
+    let latestStatus = null;
 
     function setText(id, value) {
         document.getElementById(id).textContent = value;
@@ -262,6 +263,34 @@ static const char WEB_PAGE[] PROGMEM = R"HTML(
 
     // Load sensor and actuator data
 
+function updateButtons() {
+
+    const devices = [
+        ["lamp", "hasLamp", "lampAutoAvailable"],
+        ["fan", "hasFan", "fanAutoAvailable"],
+        ["door", "hasDoor", "doorAutoAvailable"]
+    ];
+
+    devices.forEach(([id, available, autoAvailable]) => {
+
+        const card = document
+            .getElementById(id)
+            .closest(".card");
+
+        card.querySelectorAll("button").forEach(button => {
+
+            button.disabled =
+                busy ||
+                !latestStatus ||
+                !latestStatus[available] ||
+                (
+                    button.classList.contains("auto") &&
+                    !latestStatus[autoAvailable]
+                );
+        });
+    });
+}
+
     async function loadStatus() {
 
         try {
@@ -274,6 +303,7 @@ static const char WEB_PAGE[] PROGMEM = R"HTML(
             }
 
             const data = await response.json();
+            latestStatus = data;
 
             setText("connection", "Đã kết nối ESP32");
 
@@ -358,6 +388,41 @@ static const char WEB_PAGE[] PROGMEM = R"HTML(
                 data.doorAuto ? "AUTO" : "MANUAL"
             );
 
+if (!data.hasDHT20) {
+    setText("temperature", "Không lắp");
+    setText("humidity", "Không lắp");
+}
+
+if (!data.hasLight) {
+    setText("light", "Không lắp");
+}
+
+if (!data.hasPIR) {
+    setText("motion", "Không lắp");
+}
+
+if (!data.hasUltrasonic) {
+    setText("distance", "Không lắp");
+}
+
+if (!data.hasLamp) {
+    setText("lamp", "Không lắp");
+    setText("lampMode", "--");
+}
+
+if (!data.hasFan) {
+    setText("fan", "Không lắp");
+    setText("fanMode", "--");
+}
+
+if (!data.hasDoor) {
+    setText("door", "Không lắp");
+    setText("doorMode", "--");
+}
+
+updateButtons();
+
+
         } catch (error) {
 
             setText("connection", "Mất kết nối ESP32");
@@ -369,6 +434,8 @@ static const char WEB_PAGE[] PROGMEM = R"HTML(
             ];
 
             ids.forEach(id => setText(id, "--"));
+            latestStatus = null;
+updateButtons();
         }
     }
 
@@ -420,13 +487,12 @@ static const char WEB_PAGE[] PROGMEM = R"HTML(
         }
         finally {
 
-            await loadStatus();
+    await loadStatus();
 
-            busy = false;
+    busy = false;
 
-            document.querySelectorAll("button")
-                .forEach(b => b.disabled = false);
-        }
+    updateButtons();
+}
     }
 
     // Manual control
@@ -459,6 +525,7 @@ static const char WEB_PAGE[] PROGMEM = R"HTML(
 
         setTimeout(pollStatus, 2000);
     }
+    updateButtons();
 
     pollStatus();
 
@@ -638,7 +705,24 @@ static void handleStatus() {
     doc["lampAuto"] = data.actuators.lampAuto;
     doc["fanAuto"] = data.actuators.fanAuto;
     doc["doorAuto"] = data.actuators.doorAuto;
+    // Hardware availability
 
+doc["hasDHT20"] = HAS_DHT20;
+doc["hasLight"] = HAS_LIGHT_SENSOR;
+doc["hasPIR"] = HAS_PIR;
+doc["hasUltrasonic"] = HAS_ULTRASONIC;
+
+doc["hasLamp"] = HAS_EXTERNAL_LAMP || HAS_ONBOARD_LED;
+doc["hasFan"] = HAS_FAN;
+doc["hasDoor"] = HAS_SERVO;
+
+doc["lampAutoAvailable"] =
+    (HAS_EXTERNAL_LAMP || HAS_ONBOARD_LED) &&
+    HAS_PIR && HAS_LIGHT_SENSOR;
+
+doc["fanAutoAvailable"] = HAS_FAN && HAS_DHT20;
+
+doc["doorAutoAvailable"] = HAS_SERVO && HAS_ULTRASONIC;
     // System information
 
     doc["deviceId"] = DEVICE_ID;

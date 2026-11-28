@@ -16,6 +16,11 @@ static Adafruit_NeoPixel lampPixels(
     LAMP_PIN,
     NEO_GRB + NEO_KHZ800
 );
+static Adafruit_NeoPixel onboardPixels(
+    LED_COUNT,
+    NEO_PIN,
+    NEO_GRB + NEO_KHZ800
+);
 
 static Servo doorServo;
 
@@ -29,11 +34,14 @@ static bool lcdReady = false;
 
 // 1. Initialize actuators
 
+
 bool Actuators::begin() {
     if (MOCK_MODE == true) {
         return true;
     }
-    else {
+
+    // External lamp
+    if (HAS_EXTERNAL_LAMP) {
         if (!lampPixels.begin()) {
             return false;
         }
@@ -41,15 +49,38 @@ bool Actuators::begin() {
         lampPixels.setBrightness(50);
         lampPixels.clear();
         lampPixels.show();
+    }
 
-        // Fan
+    // Onboard RGB
+    if (HAS_ONBOARD_RGB) {
+        if (!onboardPixels.begin()) {
+            return false;
+        }
+
+        onboardPixels.setBrightness(
+    LED_COUNT > 1 ? 15 : 50
+);
+        onboardPixels.clear();
+        onboardPixels.show();
+    }
+
+    // Onboard LED
+    if (HAS_ONBOARD_LED) {
+        pinMode(LED_PIN, OUTPUT);
+        digitalWrite(LED_PIN, LOW);
+    }
+
+    // Fan
+    if (HAS_FAN) {
         pinMode(FAN_PIN, OUTPUT);
         digitalWrite(FAN_PIN, LOW);
 
         pinMode(FAN_AUX_PIN, OUTPUT);
         digitalWrite(FAN_AUX_PIN, LOW);
+    }
 
-        // Servo
+    // Servo
+    if (HAS_SERVO) {
         doorServo.setPeriodHertz(50);
         doorServo.attach(SERVO_PIN);
 
@@ -58,8 +89,10 @@ bool Actuators::begin() {
         }
 
         doorServo.write(DOOR_CLOSED_ANGLE);
+    }
 
-        // LCD
+    // LCD
+    if (HAS_LCD) {
         if (!Sensors::isI2CReady()) {
             Serial.println(
                 "[Actuators] WARNING: LCD skipped, I2C unavailable"
@@ -87,18 +120,26 @@ bool Actuators::begin() {
 
         lcd.setCursor(0, 1);
         lcd.print("System Ready");
-
-        return true;
     }
+
+    return true;
 }
+
 
 // 2. Control lamp
 
+
 bool Actuators::setLamp(bool state) {
+
+    if (!HAS_EXTERNAL_LAMP && !HAS_ONBOARD_LED) {
+        return false;
+    }
+
     if (MOCK_MODE == true) {
         return true;
     }
-    else {
+
+    if (HAS_EXTERNAL_LAMP) {
         if (state == true) {
             for (int i = 0; i < LAMP_LED_COUNT; i++) {
                 lampPixels.setPixelColor(
@@ -111,14 +152,25 @@ bool Actuators::setLamp(bool state) {
         }
 
         lampPixels.show();
-
-        return true;
     }
+
+    if (HAS_ONBOARD_LED) {
+        digitalWrite(
+            LED_PIN,
+            state ? HIGH : LOW
+        );
+    }
+
+    return true;
 }
+
 
 // 3. Control fan
 
 bool Actuators::setFan(bool state) {
+    if (!HAS_FAN) {
+        return false;
+    }
     if (MOCK_MODE == true) {
         return true;
     }
@@ -137,6 +189,9 @@ bool Actuators::setFan(bool state) {
 // 4. Control door
 
 bool Actuators::setDoor(bool state) {
+    if (!HAS_SERVO) {
+        return false;
+    }
     if (MOCK_MODE == true) {
         return true;
     }
@@ -159,6 +214,9 @@ bool Actuators::setDoor(bool state) {
 // 5. Update LCD
 
 void Actuators::updateLCD(const ClassroomData& data) {
+    if (!HAS_LCD) {
+        return;
+    }
     if (MOCK_MODE == true || lcdReady == false) {
         return;
     }
@@ -212,3 +270,50 @@ void Actuators::updateLCD(const ClassroomData& data) {
         );
     }
 }
+
+
+void Actuators::updateWarningLED(const ClassroomData& data) {
+
+    if (!HAS_ONBOARD_RGB || MOCK_MODE) {
+        return;
+    }
+
+    uint32_t color;
+
+    if (!data.sensors.dhtValid ||
+        millis() - data.sensors.sampledAtMs > SENSOR_STALE_MS) {
+
+        // Blue: sensor data unavailable
+        color = onboardPixels.Color(0, 0, 255);
+    }
+    else if (
+        data.sensors.temperature >= TEMP_DANGER ||
+        data.sensors.humidity >= HUMIDITY_DANGER
+    ) {
+
+        // Red: danger
+        color = onboardPixels.Color(255, 0, 0);
+    }
+    else if (
+        data.sensors.temperature >= TEMP_WARNING ||
+        data.sensors.humidity >= HUMIDITY_WARNING
+    ) {
+
+        // Yellow: warning
+        color = onboardPixels.Color(255, 255, 0);
+    }
+    else {
+
+        // Green: normal
+        color = onboardPixels.Color(0, 255, 0);
+    }
+
+    for (int i = 0; i < LED_COUNT; i++) {
+
+        onboardPixels.setPixelColor(i, color);
+    }
+
+    onboardPixels.show();
+}
+
+

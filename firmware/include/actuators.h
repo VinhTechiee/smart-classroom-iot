@@ -14,5 +14,6 @@ namespace Actuators {
     bool setDoor(bool state);
 
     void updateLCD(const ClassroomData& data);
+    void updateWarningLED(const ClassroomData& data);
 
 }

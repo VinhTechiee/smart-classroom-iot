@@ -132,6 +132,23 @@ static bool parseMethod(
 }
 
 // 5. MQTT command callback
+static bool isTargetAvailable(ControlTarget target) {
+
+    switch (target) {
+
+        case ControlTarget::Lamp:
+            return HAS_EXTERNAL_LAMP || HAS_ONBOARD_LED;
+
+        case ControlTarget::Fan:
+            return HAS_FAN;
+
+        case ControlTarget::Door:
+            return HAS_SERVO;
+
+        default:
+            return false;
+    }
+}
 
 static void onMessage(
     char* topic,
@@ -273,7 +290,16 @@ static void onMessage(
 
             return;
         }
+        if (!isTargetAvailable(target)) {
 
+    publishAck(
+        id,
+        failed,
+        "device unavailable"
+    );
+
+    return;
+}
         ControlResult modeResult;
 
         modeResult.ok = Automation::setAutomatic(
@@ -350,6 +376,16 @@ static void onMessage(
     }
 
     bool value = cmd["value"].as<bool>();
+    if (!isTargetAvailable(target)) {
+
+    publishAck(
+        id,
+        failed,
+        "device unavailable"
+    );
+
+    return;
+}
 
     if (FirmwareOTA::isUpdating()) {
 
